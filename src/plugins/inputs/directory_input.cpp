@@ -1,4 +1,4 @@
-#include "plugins/directory_input.h"
+#include "plugins/inputs/directory_input.h"
 
 #include <algorithm>
 #include <atomic>

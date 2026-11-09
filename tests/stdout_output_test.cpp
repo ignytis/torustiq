@@ -5,7 +5,7 @@
 
 #include "core/message.h"
 #include "core/plugin_registry.h"
-#include "plugins/stdout_output.h"
+#include "plugins/outputs/stdout_output.h"
 
 namespace torustiq {
 namespace {

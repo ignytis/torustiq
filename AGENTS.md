@@ -10,9 +10,12 @@ pipeline definition and runs it: one or more inputs, zero or more transforms, on
 - `src/main.cpp` — CLI (CLI11), signal handling.
 - `src/core/` — config parsing (`pipeline_config`), `message`, `plugin_registry`, `bounded_queue`,
   threaded `pipeline` runner. Must not depend on concrete plugins.
-- `src/plugins/` — built-in plugins (`stdin`, `directory`, `stdout`, and `lua` input/transform/output when `TORUSTIQ_WITH_LUA` is ON). They must use **only** the SDK C API
-  (`torustiq/sdk.h`), exactly like external plugins will. Each exports a `torustiq_register_*` function;
-  list new ones in `builtin_plugins.cpp`.
+- `src/plugins/` — built-in plugins, grouped by kind. They must use **only** the SDK C API
+  (`torustiq/sdk.h`), exactly like external plugins will:
+  - `inputs/` (`stdin`, `directory`, `lua_input`), `transforms/` (`lua_transform`), `outputs/` (`stdout`, `lua_output`);
+  - `_common/` — code shared between plugins, not a plugin kind (`_common/lua/`: sandboxed `LuaRuntime`, `LuaPlugin` base);
+  - `builtin_plugins.cpp` registers everything; each plugin exports a `torustiq_register_*` function.
+  New plugin → put it in the directory of its kind and list it in `builtin_plugins.cpp` and `CMakeLists.txt`.
 - `tests/` — one `<unit>_test.cpp` per unit (GoogleTest); each test target compiles only the sources it needs.
 - `examples/` — sample pipelines.
 - The plugin SDK is a **separate project** (`torustiq-sdk`), fetched via `FetchContent`. API changes go there
@@ -27,7 +30,7 @@ pipeline definition and runs it: one or more inputs, zero or more transforms, on
 - Plugin contract: data given to a callback is owned by the caller; copy it. No exceptions across the C boundary.
 - Keep the build warning-free (`-Wall -Wextra -Wpedantic`, `/W4`).
 
-## Lua plugins (`src/plugins/lua_*.{h,cpp}`)
+## Lua plugins (`src/plugins/{inputs,transforms,outputs}/lua_*`, shared code in `src/plugins/_common/lua/`)
 - `LuaRuntime` is the sandboxed interpreter (limited libraries, instruction-count hook, `RequestStop`).
   Lua errors use `longjmp`: never call `lua_error`/`luaL_error` (or an API that can raise) while C++ objects
   with destructors are alive in that frame. Convert messages with raw accessors only (no metamethods).

@@ -1,5 +1,5 @@
-#ifndef TORUSTIQ_PLUGINS_LUA_RUNTIME_H_
-#define TORUSTIQ_PLUGINS_LUA_RUNTIME_H_
+#ifndef TORUSTIQ_PLUGINS_COMMON_LUA_LUA_RUNTIME_H_
+#define TORUSTIQ_PLUGINS_COMMON_LUA_LUA_RUNTIME_H_
 
 #include <atomic>
 #include <cstdint>
@@ -112,4 +112,4 @@ class LuaRuntime {
 
 } // namespace torustiq::plugins
 
-#endif // TORUSTIQ_PLUGINS_LUA_RUNTIME_H_
+#endif // TORUSTIQ_PLUGINS_COMMON_LUA_LUA_RUNTIME_H_

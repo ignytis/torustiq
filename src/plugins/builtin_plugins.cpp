@@ -2,12 +2,14 @@
 
 #include <stdexcept>
 
-#include "plugins/directory_input.h"
+#include "plugins/inputs/directory_input.h"
+#include "plugins/inputs/stdin_input.h"
+#include "plugins/outputs/stdout_output.h"
 #ifdef TORUSTIQ_WITH_LUA
-#include "plugins/lua_plugins.h"
+#include "plugins/inputs/lua_input.h"
+#include "plugins/outputs/lua_output.h"
+#include "plugins/transforms/lua_transform.h"
 #endif
-#include "plugins/stdin_input.h"
-#include "plugins/stdout_output.h"
 
 namespace torustiq {
 
@@ -18,7 +20,9 @@ void RegisterBuiltinPlugins(PluginRegistry& registry) {
              torustiq_register_directory_input,
              torustiq_register_stdout_output,
 #ifdef TORUSTIQ_WITH_LUA
-             torustiq_register_lua_plugins,
+             torustiq_register_lua_input,
+             torustiq_register_lua_transform,
+             torustiq_register_lua_output,
 #endif
          }) {
         if (fn(&registrar) != TORUSTIQ_OK) {

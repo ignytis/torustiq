@@ -1,5 +1,5 @@
-#ifndef TORUSTIQ_PLUGINS_STDIN_INPUT_H_
-#define TORUSTIQ_PLUGINS_STDIN_INPUT_H_
+#ifndef TORUSTIQ_PLUGINS_INPUTS_STDIN_INPUT_H_
+#define TORUSTIQ_PLUGINS_INPUTS_STDIN_INPUT_H_
 
 #include "torustiq/sdk.h"
 
@@ -9,4 +9,4 @@ extern "C" {
 int32_t torustiq_register_stdin_input(const torustiq_registrar* registrar);
 }
 
-#endif // TORUSTIQ_PLUGINS_STDIN_INPUT_H_
+#endif // TORUSTIQ_PLUGINS_INPUTS_STDIN_INPUT_H_

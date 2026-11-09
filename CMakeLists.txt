@@ -89,14 +89,19 @@ torustiq_set_warnings(torustiq_core)
 # --- Built-in plugins (use only the SDK C API). ---
 set(TORUSTIQ_PLUGIN_SOURCES
     src/plugins/builtin_plugins.cpp
-    src/plugins/directory_input.cpp
-    src/plugins/stdin_input.cpp
-    src/plugins/stdout_output.cpp)
+    src/plugins/inputs/directory_input.cpp
+    src/plugins/inputs/stdin_input.cpp
+    src/plugins/outputs/stdout_output.cpp)
 add_library(torustiq_plugins STATIC ${TORUSTIQ_PLUGIN_SOURCES})
 target_include_directories(torustiq_plugins PUBLIC src)
 target_link_libraries(torustiq_plugins PUBLIC torustiq::sdk torustiq_core)
 if(TORUSTIQ_WITH_LUA)
-    target_sources(torustiq_plugins PRIVATE src/plugins/lua_plugins.cpp src/plugins/lua_runtime.cpp)
+    target_sources(torustiq_plugins PRIVATE
+        src/plugins/_common/lua/lua_plugin.cpp
+        src/plugins/_common/lua/lua_runtime.cpp
+        src/plugins/inputs/lua_input.cpp
+        src/plugins/transforms/lua_transform.cpp
+        src/plugins/outputs/lua_output.cpp)
     target_link_libraries(torustiq_plugins PUBLIC torustiq::lua)
     target_compile_definitions(torustiq_plugins PRIVATE TORUSTIQ_WITH_LUA)
 endif()

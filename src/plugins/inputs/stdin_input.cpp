@@ -1,4 +1,4 @@
-#include "plugins/stdin_input.h"
+#include "plugins/inputs/stdin_input.h"
 
 #include <atomic>
 #include <iostream>

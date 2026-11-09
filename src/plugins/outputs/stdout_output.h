@@ -1,5 +1,5 @@
-#ifndef TORUSTIQ_PLUGINS_STDOUT_OUTPUT_H_
-#define TORUSTIQ_PLUGINS_STDOUT_OUTPUT_H_
+#ifndef TORUSTIQ_PLUGINS_OUTPUTS_STDOUT_OUTPUT_H_
+#define TORUSTIQ_PLUGINS_OUTPUTS_STDOUT_OUTPUT_H_
 
 #include <string>
 
@@ -18,4 +18,4 @@ extern "C" {
 int32_t torustiq_register_stdout_output(const torustiq_registrar* registrar);
 }
 
-#endif // TORUSTIQ_PLUGINS_STDOUT_OUTPUT_H_
+#endif // TORUSTIQ_PLUGINS_OUTPUTS_STDOUT_OUTPUT_H_

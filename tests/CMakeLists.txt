@@ -31,17 +31,25 @@ torustiq_add_test(pipeline_test
                   SOURCES ${SRC}/core/pipeline.cpp ${SRC}/core/pipeline_config.cpp
                           ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp
                   LIBS yaml-cpp::yaml-cpp)
-torustiq_add_test(stdout_output_test SOURCES ${SRC}/plugins/stdout_output.cpp
+torustiq_add_test(stdout_output_test SOURCES ${SRC}/plugins/outputs/stdout_output.cpp
                   ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp)
-torustiq_add_test(stdin_input_test SOURCES ${SRC}/plugins/stdin_input.cpp
+torustiq_add_test(stdin_input_test SOURCES ${SRC}/plugins/inputs/stdin_input.cpp
                   ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp)
-torustiq_add_test(directory_input_test SOURCES ${SRC}/plugins/directory_input.cpp
+torustiq_add_test(directory_input_test SOURCES ${SRC}/plugins/inputs/directory_input.cpp
                   ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp)
 
 if(TORUSTIQ_WITH_LUA)
-    torustiq_add_test(lua_plugins_test
-                      SOURCES ${SRC}/plugins/lua_plugins.cpp ${SRC}/plugins/lua_runtime.cpp
-                              ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp
+    set(LUA_COMMON ${SRC}/plugins/_common/lua/lua_plugin.cpp
+                   ${SRC}/plugins/_common/lua/lua_runtime.cpp
+                   ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp)
+    torustiq_add_test(lua_transform_test
+                      SOURCES ${SRC}/plugins/transforms/lua_transform.cpp ${LUA_COMMON}
+                      LIBS torustiq::lua)
+    torustiq_add_test(lua_input_test
+                      SOURCES ${SRC}/plugins/inputs/lua_input.cpp ${LUA_COMMON}
+                      LIBS torustiq::lua)
+    torustiq_add_test(lua_output_test
+                      SOURCES ${SRC}/plugins/outputs/lua_output.cpp ${LUA_COMMON}
                       LIBS torustiq::lua)
     torustiq_add_test(lua_pipeline_test LIBS torustiq_core torustiq_plugins)
     target_compile_definitions(lua_pipeline_test PRIVATE

@@ -1,4 +1,4 @@
-#include "plugins/stdout_output.h"
+#include "plugins/outputs/stdout_output.h"
 
 #include <iostream>
 

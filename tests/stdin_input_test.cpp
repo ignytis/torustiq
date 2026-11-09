@@ -5,7 +5,7 @@
 
 #include "core/message.h"
 #include "core/plugin_registry.h"
-#include "plugins/stdin_input.h"
+#include "plugins/inputs/stdin_input.h"
 
 namespace torustiq {
 namespace {

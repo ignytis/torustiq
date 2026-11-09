@@ -5,7 +5,7 @@
 
 #include "core/message.h"
 #include "core/plugin_registry.h"
-#include "plugins/directory_input.h"
+#include "plugins/inputs/directory_input.h"
 
 namespace fs = std::filesystem;
 

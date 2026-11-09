@@ -1,4 +1,4 @@
-#include "plugins/lua_runtime.h"
+#include "plugins/_common/lua/lua_runtime.h"
 
 #include <algorithm>
 #include <charconv>
