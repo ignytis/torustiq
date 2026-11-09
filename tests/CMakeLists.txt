@@ -37,3 +37,13 @@ torustiq_add_test(stdin_input_test SOURCES ${SRC}/plugins/stdin_input.cpp
                   ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp)
 torustiq_add_test(directory_input_test SOURCES ${SRC}/plugins/directory_input.cpp
                   ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp)
+
+if(TORUSTIQ_WITH_LUA)
+    torustiq_add_test(lua_plugins_test
+                      SOURCES ${SRC}/plugins/lua_plugins.cpp ${SRC}/plugins/lua_runtime.cpp
+                              ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp
+                      LIBS torustiq::lua)
+    torustiq_add_test(lua_pipeline_test LIBS torustiq_core torustiq_plugins)
+    target_compile_definitions(lua_pipeline_test PRIVATE
+                               TORUSTIQ_EXAMPLES_DIR="${CMAKE_SOURCE_DIR}/examples")
+endif()

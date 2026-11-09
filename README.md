@@ -47,7 +47,25 @@ outputs:
 |------|------|----------------------|
 | `stdin` | input | Each line is a record. |
 | `directory` | input | Each file in `path` (sorted) is a record; headers `filename`, `path`. |
+| `lua` | input, transform, output | Scripts in Lua, see below. |
 | `stdout` | output | Prints `format` (default `%BODY%`) per record; supports `%BODY%` and `%HEADERS[name]%`. |
 
-See `examples/` for runnable pipelines. Plugins are written against the SDK; see the SDK README.
+### Lua plugins
+`type: lua` works as an input, a transform and an output. Parameters: `script` (inline code) or `file`
+(path), and optional `max_instructions` (default `10000000`, `0` = unlimited), which caps the work done per
+call so a runaway script fails with an error instead of hanging the stage. For inputs it applies between
+two `emit()` calls. The `config:` section is visible to the script as the global table `config`.
+
+```lua
+-- input:     function run(emit)    -- emit(msg) returns false when the pipeline is stopping; sleep(seconds) exists
+-- transform: function process(msg) -- return nil (drop), a message, or a list of messages
+-- output:    function write(msg)   -- optional: function flush() at the end
+-- message:   { body = "bytes", headers = { key = "value" } }   (a plain string means body only)
+```
+Scripts are sandboxed: only the base library (without `load`, `dofile`, `loadfile`, `require`), `string`,
+`table`, `math`, `utf8` and `coroutine` are available; there is no `io`, `os`, `package` or `debug`.
+Lua is optional: configure with `-DTORUSTIQ_WITH_LUA=OFF` to build without it. The system Lua (5.4+) is
+used if found, otherwise Lua 5.4 is downloaded and built.
+
+See `examples/` for runnable pipelines (`examples/lua_pipeline.yaml` uses Lua for every step). Plugins are written against the SDK; see the SDK README.
 Contributor/agent guidance is in [AGENTS.md](AGENTS.md).

@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(TORUSTIQ_BUILD_TESTS "Build unit tests" ON)
+option(TORUSTIQ_WITH_LUA "Build the Lua input/transform/output plugins" ON)
 
 include(FetchContent)
 find_package(Threads REQUIRED)
@@ -39,6 +40,31 @@ function(torustiq_set_warnings target)
     endif()
 endfunction()
 
+# --- Lua (optional): system package, or built from source. Target: torustiq::lua ---
+if(TORUSTIQ_WITH_LUA)
+    find_package(Lua 5.4 QUIET)
+    if(LUA_FOUND)
+        add_library(torustiq_lua INTERFACE)
+        target_include_directories(torustiq_lua SYSTEM INTERFACE ${LUA_INCLUDE_DIR})
+        target_link_libraries(torustiq_lua INTERFACE ${LUA_LIBRARIES})
+    else()
+        message(STATUS "System Lua not found, fetching Lua 5.4")
+        enable_language(C)
+        FetchContent_Declare(lua_src
+            GIT_REPOSITORY https://github.com/lua/lua.git
+            GIT_TAG v5.4.7)
+        FetchContent_MakeAvailable(lua_src)  # Lua has no CMakeLists.txt: this only downloads it
+        file(GLOB LUA_SOURCES ${lua_src_SOURCE_DIR}/*.c)
+        list(FILTER LUA_SOURCES EXCLUDE REGEX ".*/(lua|luac|onelua|ltests)\\.c$")
+        add_library(torustiq_lua STATIC ${LUA_SOURCES})
+        target_include_directories(torustiq_lua SYSTEM PUBLIC ${lua_src_SOURCE_DIR})
+        if(UNIX)
+            target_link_libraries(torustiq_lua PUBLIC m)
+        endif()
+    endif()
+    add_library(torustiq::lua ALIAS torustiq_lua)
+endif()
+
 # --- SDK: separate project, imported the same way plugins do it. ---
 # For a local checkout: -DFETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK=/path/to/torustiq-sdk
 find_package(torustiq_sdk QUIET)
@@ -69,6 +95,11 @@ set(TORUSTIQ_PLUGIN_SOURCES
 add_library(torustiq_plugins STATIC ${TORUSTIQ_PLUGIN_SOURCES})
 target_include_directories(torustiq_plugins PUBLIC src)
 target_link_libraries(torustiq_plugins PUBLIC torustiq::sdk torustiq_core)
+if(TORUSTIQ_WITH_LUA)
+    target_sources(torustiq_plugins PRIVATE src/plugins/lua_plugins.cpp src/plugins/lua_runtime.cpp)
+    target_link_libraries(torustiq_plugins PUBLIC torustiq::lua)
+    target_compile_definitions(torustiq_plugins PRIVATE TORUSTIQ_WITH_LUA)
+endif()
 torustiq_set_warnings(torustiq_plugins)
 
 # --- Executable. ---

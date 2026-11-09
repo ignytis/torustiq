@@ -1,0 +1,58 @@
+# Every step is a Lua script. Run: build/torustiq examples/lua_pipeline.yaml
+#
+# Message = { body = "bytes", headers = { key = "value" } }
+# Parameters from `config:` are visible to the script as the global table `config`.
+# Only the base (without load/dofile/loadfile), string, table, math, utf8 and coroutine libraries
+# are available. `max_instructions` caps the work done per call (default 10000000, 0 = unlimited).
+name: All-Lua pipeline
+
+inputs:
+  generator:
+    type: lua
+    config:
+      count: 5
+      max_instructions: 1000000
+      script: |
+        -- Input: run(emit) pushes messages; emit() returns false when the pipeline is stopping.
+        function run(emit)
+          for i = 1, tonumber(config.count) do
+            if not emit({ body = "message " .. i, headers = { seq = tostring(i) } }) then
+              return
+            end
+          end
+        end
+
+transforms:
+  shout_odd:
+    type: lua
+    config:
+      script: |
+        -- Transform: return nil to drop, a message, or a list of messages.
+        function process(msg)
+          if tonumber(msg.headers.seq) % 2 == 0 then
+            return nil
+          end
+          msg.body = msg.body:upper()
+          msg.headers.processed = "yes"
+          return msg
+        end
+
+outputs:
+  printer:
+    type: lua
+    config:
+      script: |
+        -- Output: write(msg) per message, optional flush() at the end.
+        local total = 0
+        function write(msg)
+          total = total + 1
+          local keys = {}
+          for k in pairs(msg.headers) do keys[#keys + 1] = k end
+          table.sort(keys)
+          local parts = {}
+          for _, k in ipairs(keys) do parts[#parts + 1] = k .. "=" .. msg.headers[k] end
+          print(string.format("#%d %s [%s]", total, msg.body, table.concat(parts, ", ")))
+        end
+        function flush()
+          print("total: " .. total)
+        end
