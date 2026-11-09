@@ -1,0 +1,13 @@
+name: Print files of a directory
+inputs:
+  files:
+    type: directory
+    config:
+      path: ./examples
+outputs:
+  out:
+    inputs:
+      - files
+    type: stdout
+    config:
+      format: "%HEADERS[filename]%"

@@ -1,3 +1,8 @@
+# Editors
+.vscode
+.project
+.zed
+
 # Prerequisites
 *.d
 

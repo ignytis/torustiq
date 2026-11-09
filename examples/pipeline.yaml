@@ -1,0 +1,9 @@
+name: Echo stdin
+inputs:
+  my_input_id:
+    type: stdin
+outputs:
+  my_output_id:
+    type: stdout
+    config:
+      format: "line: %BODY%"
