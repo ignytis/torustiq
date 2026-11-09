@@ -1,5 +1,6 @@
 # torustiq
-A data pipeline constructor: reads records from an input, optionally transforms them, and writes them to an output.
+Torustiq (_Estonian: torustik - a pipeline_) is a data pipeline constructor: reads records from an input,
+optionally transforms them, and writes them to an output.
 Pipelines can be finite (a directory of files) or continuous (a stream); processing is multithreaded with
 backpressure between stages.
 
