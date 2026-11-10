@@ -23,7 +23,7 @@ pipeline definition and runs it: one or more inputs, zero or more transforms, on
   `TORUSTIQ_HOME` defaults to the compile-time `TORUSTIQ_DEFAULT_HOME` (`<project>/dev/torustiq_home` when
   `TORUSTIQ_DEV_MODE`, on by default in Debug; otherwise `~/.torustiq`); `TORUSTIQ_PLUGINS_DIR` defaults to
   `TORUSTIQ_HOME/plugins`. A dev build never looks outside the project unless the variables are set. `dev/` is gitignored. Sample plugins live in the `torustiq-plugins` project
-  (`scripts/link_dev.sh` symlinks them; try `examples/plugins.yaml`).
+  (`scripts/link_dev.sh` symlinks them; examples are in that project's `examples/`).
 - `tests/` — one `<unit>_test.cpp` per unit (GoogleTest); each test target compiles only the sources it needs.
 - `examples/` — sample pipelines.
 - The plugin SDK is a **separate project** (`torustiq-sdk`), fetched via `FetchContent`. API changes go there
