@@ -71,3 +71,6 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Local development home (TORUSTIQ_HOME in dev mode)
+dev

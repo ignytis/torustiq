@@ -25,6 +25,29 @@ endfunction()
 torustiq_add_test(message_test SOURCES ${SRC}/core/message.cpp)
 torustiq_add_test(bounded_queue_test)
 torustiq_add_test(plugin_registry_test SOURCES ${SRC}/core/plugin_registry.cpp)
+torustiq_add_test(paths_test SOURCES ${SRC}/core/paths.cpp)
+# POSIX only: the test uses setenv and symlinks.
+if(UNIX)
+    torustiq_add_test(plugin_loader_test
+                      SOURCES ${SRC}/core/plugin_loader.cpp ${SRC}/core/plugin_registry.cpp
+                      LIBS ${CMAKE_DL_LIBS})
+    # Fake plugin libraries loaded by plugin_loader_test.
+    foreach(spec "fake_a:1" "fake_b:1" "fake_bad:999")
+        string(REPLACE ":" ";" parts ${spec})
+        list(GET parts 0 fake_id)
+        list(GET parts 1 fake_abi)
+        add_library(${fake_id} MODULE fake_plugin.cpp)
+        target_link_libraries(${fake_id} PRIVATE torustiq::sdk)
+        target_compile_definitions(${fake_id} PRIVATE FAKE_PLUGIN_ID="${fake_id}"
+                                                      FAKE_PLUGIN_ABI=${fake_abi})
+        torustiq_set_warnings(${fake_id})
+        add_dependencies(plugin_loader_test ${fake_id})
+    endforeach()
+    target_compile_definitions(plugin_loader_test PRIVATE
+        FAKE_PLUGIN_A="$<TARGET_FILE:fake_a>"
+        FAKE_PLUGIN_B="$<TARGET_FILE:fake_b>"
+        FAKE_PLUGIN_BAD_ABI="$<TARGET_FILE:fake_bad>")
+endif()
 torustiq_add_test(pipeline_config_test SOURCES ${SRC}/core/pipeline_config.cpp
                   LIBS yaml-cpp::yaml-cpp)
 torustiq_add_test(pipeline_test

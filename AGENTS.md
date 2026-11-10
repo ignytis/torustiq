@@ -16,6 +16,14 @@ pipeline definition and runs it: one or more inputs, zero or more transforms, on
   - `_common/` — code shared between plugins, not a plugin kind (`_common/lua/`: sandboxed `LuaRuntime`, `LuaPlugin` base);
   - `builtin_plugins.cpp` registers everything; each plugin exports a `torustiq_register_*` function.
   New plugin → put it in the directory of its kind and list it in `builtin_plugins.cpp` and `CMakeLists.txt`.
+- Dynamic plugins: `core/plugin_loader` scans `TORUSTIQ_PLUGINS_DIR` (`.so/.dylib/.dll`), reads each
+  library's `torustiq_plugin_get_info` (ID + ABI) and closes it again. Only plugins whose ID is used as a
+  pipeline `type` (and is not built in) are loaded and get `torustiq_plugin_init` — once per library; the
+  per-step `create` runs per pipeline step. `PluginLoader` must outlive `Pipeline`/`PluginRegistry`.
+  `TORUSTIQ_HOME` defaults to the compile-time `TORUSTIQ_DEFAULT_HOME` (`<project>/dev/torustiq_home` when
+  `TORUSTIQ_DEV_MODE`, on by default in Debug; otherwise `~/.torustiq`); `TORUSTIQ_PLUGINS_DIR` defaults to
+  `TORUSTIQ_HOME/plugins`. A dev build never looks outside the project unless the variables are set. `dev/` is gitignored. Sample plugins live in the `torustiq-plugins` project
+  (`scripts/link_dev.sh` symlinks them; try `examples/plugins.yaml`).
 - `tests/` — one `<unit>_test.cpp` per unit (GoogleTest); each test target compiles only the sources it needs.
 - `examples/` — sample pipelines.
 - The plugin SDK is a **separate project** (`torustiq-sdk`), fetched via `FetchContent`. API changes go there

@@ -7,6 +7,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(TORUSTIQ_BUILD_TESTS "Build unit tests" ON)
+# Development mode: TORUSTIQ_HOME defaults to <project>/dev/torustiq_home instead of ~/.torustiq.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(TORUSTIQ_DEV_MODE_DEFAULT ON)
+else()
+    set(TORUSTIQ_DEV_MODE_DEFAULT OFF)
+endif()
+option(TORUSTIQ_DEV_MODE "Default TORUSTIQ_HOME to <project>/dev/torustiq_home" ${TORUSTIQ_DEV_MODE_DEFAULT})
 option(TORUSTIQ_WITH_LUA "Build the Lua input/transform/output plugins" ON)
 
 include(FetchContent)
@@ -80,10 +87,13 @@ set(TORUSTIQ_CORE_SOURCES
     src/core/message.cpp
     src/core/pipeline.cpp
     src/core/pipeline_config.cpp
+    src/core/paths.cpp
+    src/core/plugin_loader.cpp
     src/core/plugin_registry.cpp)
 add_library(torustiq_core STATIC ${TORUSTIQ_CORE_SOURCES})
 target_include_directories(torustiq_core PUBLIC src)
 target_link_libraries(torustiq_core PUBLIC torustiq::sdk yaml-cpp::yaml-cpp Threads::Threads)
+target_link_libraries(torustiq_core PUBLIC ${CMAKE_DL_LIBS})
 torustiq_set_warnings(torustiq_core)
 
 # --- Built-in plugins (use only the SDK C API). ---
@@ -110,6 +120,13 @@ torustiq_set_warnings(torustiq_plugins)
 # --- Executable. ---
 add_executable(torustiq src/main.cpp)
 target_link_libraries(torustiq PRIVATE torustiq_core torustiq_plugins CLI11::CLI11)
+# Empty means "<user home>/.torustiq", resolved at run time.
+if(TORUSTIQ_DEV_MODE)
+    target_compile_definitions(torustiq PRIVATE
+        TORUSTIQ_DEFAULT_HOME="${CMAKE_SOURCE_DIR}/dev/torustiq_home")
+else()
+    target_compile_definitions(torustiq PRIVATE TORUSTIQ_DEFAULT_HOME="")
+endif()
 torustiq_set_warnings(torustiq)
 
 if(TORUSTIQ_BUILD_TESTS)

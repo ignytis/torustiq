@@ -8,8 +8,10 @@
 
 #include <CLI/CLI.hpp>
 
+#include "core/paths.h"
 #include "core/pipeline.h"
 #include "core/pipeline_config.h"
+#include "core/plugin_loader.h"
 #include "core/plugin_registry.h"
 #include "plugins/builtin_plugins.h"
 
@@ -33,8 +35,13 @@ int main(int argc, char** argv) {
 
     try {
         const torustiq::PipelineConfig config = torustiq::LoadPipelineConfig(pipeline_path);
+        // The loader is declared first so that it is destroyed last: plugin vtables point into
+        // the loaded libraries.
+        torustiq::PluginLoader loader;
         torustiq::PluginRegistry registry;
         torustiq::RegisterBuiltinPlugins(registry);
+        loader.Scan(torustiq::ResolvePluginsDir(TORUSTIQ_DEFAULT_HOME, torustiq::ProcessEnv));
+        torustiq::LoadReferencedPlugins(config, loader, registry);
         torustiq::Pipeline pipeline(config, registry);
 
         std::signal(SIGINT, HandleSignal);
