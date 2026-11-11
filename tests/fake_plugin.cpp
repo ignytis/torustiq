@@ -22,7 +22,7 @@ void Log(const char* what) {
     }
 }
 
-int32_t Create(const torustiq_config*, void** out_handle) {
+int32_t Create(const torustiq_config*, const torustiq_payload_spec*, void** out_handle) {
     *out_handle = new int(0);
     return TORUSTIQ_OK;
 }

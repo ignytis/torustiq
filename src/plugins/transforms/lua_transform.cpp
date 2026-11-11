@@ -9,13 +9,28 @@
 namespace torustiq::plugins {
 namespace {
 
-int32_t Create(const torustiq_config* config, void** out_handle) {
-    return CreateLuaPlugin(config, "lua transform", "process", out_handle);
+// The scripts handle both payload kinds; the emitted kind is the input kind unless `payload`
+// says otherwise (e.g. a script that parses its bytes input into a structured value).
+int32_t Create(const torustiq_config* config,
+               const torustiq_payload_spec* input,
+               torustiq_payload_spec* out_output,
+               void** out_handle) {
+    uint32_t kind = input->kind;
+    if (ParseLuaPayloadKind(config, "lua transform", input->kind, &kind) != TORUSTIQ_OK) {
+        return TORUSTIQ_ERROR;
+    }
+    const int32_t status = CreateLuaPlugin(config, "lua transform", "process", out_handle);
+    if (status == TORUSTIQ_OK) {
+        static_cast<LuaPlugin*>(*out_handle)->emit_kind = kind;
+        out_output->kind = kind;
+    }
+    return status;
 }
 
 int32_t
 Process(void* handle, const torustiq_message* message, torustiq_emit_fn emit, void* user_data) {
-    LuaRuntime& runtime = *static_cast<LuaPlugin*>(handle)->runtime;
+    auto* plugin = static_cast<LuaPlugin*>(handle);
+    LuaRuntime& runtime = *plugin->runtime;
     try {
         lua_State* state = runtime.state();
         std::string error;
@@ -28,7 +43,7 @@ Process(void* handle, const torustiq_message* message, torustiq_emit_fn emit, vo
             return TORUSTIQ_ERROR;
         }
         std::vector<LuaMessage> results;
-        const bool ok = LuaRuntime::ReadMessages(state, -1, results, error);
+        const bool ok = LuaRuntime::ReadMessages(state, -1, plugin->emit_kind, results, error);
         lua_pop(state, 1);
         if (!ok) {
             std::cerr << "lua transform: invalid result: " << error << "\n";

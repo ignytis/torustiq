@@ -55,15 +55,167 @@ std::string PopError(lua_State* state) {
 
 } // namespace
 
+namespace {
+
+constexpr int kMaxDepth = 64; // nesting limit of structured payloads in Lua
+
+// Converts the Lua value at `index` to a LuaValue. Raw accesses only (no metamethods).
+// Tables: a sequence 1..n is an array, a table with string keys is a map (members sorted by key),
+// an empty table is an empty map. The sentinel `null` (light userdata NULL) is a null.
+bool ReadValue(lua_State* state, int index, int depth, LuaValue& out, std::string& error) {
+    index = lua_absindex(state, index);
+    out = LuaValue{};
+    switch (lua_type(state, index)) {
+    case LUA_TNIL:
+        return true;
+    case LUA_TLIGHTUSERDATA:
+        if (lua_touserdata(state, index) == nullptr) {
+            return true;
+        }
+        error = "unsupported value type userdata";
+        return false;
+    case LUA_TBOOLEAN:
+        out.kind = TORUSTIQ_VALUE_BOOL;
+        out.b = lua_toboolean(state, index) != 0;
+        return true;
+    case LUA_TNUMBER:
+        if (lua_isinteger(state, index)) {
+            out.kind = TORUSTIQ_VALUE_INT;
+            out.i = static_cast<int64_t>(lua_tointeger(state, index));
+        } else {
+            out.kind = TORUSTIQ_VALUE_DOUBLE;
+            out.d = static_cast<double>(lua_tonumber(state, index));
+        }
+        return true;
+    case LUA_TSTRING: {
+        size_t length = 0;
+        const char* text = lua_tolstring(state, index, &length);
+        out.kind = TORUSTIQ_VALUE_STRING;
+        out.text.assign(text, length);
+        return true;
+    }
+    case LUA_TTABLE:
+        break;
+    default:
+        error =
+            std::string("unsupported value type ") + lua_typename(state, lua_type(state, index));
+        return false;
+    }
+    if (depth >= kMaxDepth || lua_checkstack(state, 4) == 0) {
+        error = "value is nested too deeply (or is cyclic)";
+        return false;
+    }
+
+    const lua_Unsigned length = lua_rawlen(state, index);
+    if (length > 0) {
+        out.kind = TORUSTIQ_VALUE_ARRAY;
+        for (lua_Unsigned n = 1; n <= length; ++n) {
+            lua_rawgeti(state, index, static_cast<lua_Integer>(n));
+            LuaValue item;
+            const bool ok = ReadValue(state, -1, depth + 1, item, error);
+            lua_pop(state, 1);
+            if (!ok) {
+                return false;
+            }
+            out.items.push_back(std::move(item));
+        }
+        // Reject tables that have more than the sequence part.
+        lua_pushnil(state);
+        lua_Unsigned count = 0;
+        while (lua_next(state, index) != 0) {
+            lua_pop(state, 1);
+            ++count;
+        }
+        if (count != length) {
+            error = "a table mixing a sequence with other keys cannot be a value";
+            return false;
+        }
+        return true;
+    }
+
+    out.kind = TORUSTIQ_VALUE_MAP;
+    lua_pushnil(state);
+    while (lua_next(state, index) != 0) {
+        if (lua_type(state, -2) != LUA_TSTRING) {
+            lua_pop(state, 2);
+            error = "map keys of a value must be strings";
+            return false;
+        }
+        size_t key_length = 0;
+        const char* key = lua_tolstring(state, -2, &key_length);
+        LuaValue member;
+        const bool ok = ReadValue(state, -1, depth + 1, member, error);
+        if (!ok) {
+            lua_pop(state, 2);
+            return false;
+        }
+        out.entries.emplace_back(std::string(key, key_length), std::move(member));
+        lua_pop(state, 1); // value; keep the key for lua_next
+    }
+    std::sort(out.entries.begin(), out.entries.end(), [](const auto& a, const auto& b) {
+        return a.first < b.first;
+    });
+    return true;
+}
+
+} // namespace
+
 LuaMessageView::LuaMessageView(const LuaMessage& message) {
     headers_.reserve(message.headers.size());
     for (const auto& [key, value] : message.headers) {
         headers_.push_back({key.c_str(), value.c_str()});
     }
-    message_.body.data = reinterpret_cast<const uint8_t*>(message.body.data());
-    message_.body.len = message.body.size();
+    message_.payload = Build(message.payload);
     message_.headers = headers_.data();
     message_.header_count = headers_.size();
+}
+
+torustiq_value LuaMessageView::Build(const LuaValue& value) {
+    torustiq_value out{};
+    out.kind = value.kind;
+    switch (value.kind) {
+    case TORUSTIQ_VALUE_BOOL:
+        out.as.b = value.b ? 1 : 0;
+        break;
+    case TORUSTIQ_VALUE_INT:
+        out.as.i = value.i;
+        break;
+    case TORUSTIQ_VALUE_DOUBLE:
+        out.as.d = value.d;
+        break;
+    case TORUSTIQ_VALUE_STRING:
+    case TORUSTIQ_VALUE_BYTES:
+        out.as.bytes.data = reinterpret_cast<const uint8_t*>(value.text.data());
+        out.as.bytes.len = value.text.size();
+        break;
+    case TORUSTIQ_VALUE_ARRAY: {
+        auto& items = arrays_.emplace_back();
+        items.reserve(value.items.size());
+        for (const LuaValue& item : value.items) {
+            items.push_back(Build(item));
+        }
+        out.as.array.items = items.data();
+        out.as.array.count = items.size();
+        break;
+    }
+    case TORUSTIQ_VALUE_MAP: {
+        auto& entries = maps_.emplace_back();
+        entries.reserve(value.entries.size());
+        for (const auto& [key, member] : value.entries) {
+            torustiq_map_entry entry{};
+            entry.key.data = reinterpret_cast<const uint8_t*>(key.data());
+            entry.key.len = key.size();
+            entry.value = Build(member);
+            entries.push_back(entry);
+        }
+        out.as.map.entries = entries.data();
+        out.as.map.count = entries.size();
+        break;
+    }
+    default:
+        break; // NULL
+    }
+    return out;
 }
 
 LuaRuntime::LuaRuntime(const torustiq_config* config, const std::string& kind) {
@@ -100,6 +252,8 @@ LuaRuntime::LuaRuntime(const torustiq_config* config, const std::string& kind) {
             lua_setfield(state_, -2, config->items[i].key);
         }
         lua_setglobal(state_, "config");
+        lua_pushlightuserdata(state_, nullptr);
+        lua_setglobal(state_, "null");
 
         lua_sethook(state_, Hook, LUA_MASKCOUNT, kHookStep);
 
@@ -168,10 +322,63 @@ bool LuaRuntime::Call(int nargs, int nresults, std::string& error) {
     return true;
 }
 
+void LuaRuntime::PushValue(const torustiq_value& value, int depth) {
+    switch (value.kind) {
+    case TORUSTIQ_VALUE_BOOL:
+        lua_pushboolean(state_, value.as.b != 0);
+        break;
+    case TORUSTIQ_VALUE_INT:
+        lua_pushinteger(state_, static_cast<lua_Integer>(value.as.i));
+        break;
+    case TORUSTIQ_VALUE_DOUBLE:
+        lua_pushnumber(state_, static_cast<lua_Number>(value.as.d));
+        break;
+    case TORUSTIQ_VALUE_STRING:
+    case TORUSTIQ_VALUE_BYTES:
+        lua_pushlstring(
+            state_, reinterpret_cast<const char*>(value.as.bytes.data), value.as.bytes.len);
+        break;
+    case TORUSTIQ_VALUE_ARRAY:
+    case TORUSTIQ_VALUE_MAP: {
+        if (depth >= kMaxDepth || lua_checkstack(state_, 4) == 0) {
+            lua_pushlightuserdata(state_, nullptr); // too deep: the host limits this already
+            break;
+        }
+        if (value.kind == TORUSTIQ_VALUE_ARRAY) {
+            lua_createtable(state_, static_cast<int>(value.as.array.count), 0);
+            for (size_t n = 0; n < value.as.array.count; ++n) {
+                PushValue(value.as.array.items[n], depth + 1);
+                lua_rawseti(state_, -2, static_cast<lua_Integer>(n + 1));
+            }
+        } else {
+            lua_createtable(state_, 0, static_cast<int>(value.as.map.count));
+            for (size_t n = 0; n < value.as.map.count; ++n) {
+                const torustiq_map_entry& entry = value.as.map.entries[n];
+                lua_pushlstring(
+                    state_, reinterpret_cast<const char*>(entry.key.data), entry.key.len);
+                PushValue(entry.value, depth + 1);
+                lua_rawset(state_, -3);
+            }
+        }
+        break;
+    }
+    default: // NULL
+        lua_pushlightuserdata(state_, nullptr);
+        break;
+    }
+}
+
 void LuaRuntime::PushMessage(const torustiq_message& message) {
     lua_createtable(state_, 0, 2);
-    lua_pushlstring(state_, reinterpret_cast<const char*>(message.body.data), message.body.len);
-    lua_setfield(state_, -2, "body");
+    if (message.payload.kind == TORUSTIQ_VALUE_BYTES) {
+        lua_pushlstring(state_,
+                        reinterpret_cast<const char*>(message.payload.as.bytes.data),
+                        message.payload.as.bytes.len);
+        lua_setfield(state_, -2, "body");
+    } else {
+        PushValue(message.payload, 0);
+        lua_setfield(state_, -2, "value");
+    }
     lua_createtable(state_, 0, static_cast<int>(message.header_count));
     for (size_t i = 0; i < message.header_count; ++i) {
         lua_pushstring(state_, message.headers[i].value != nullptr ? message.headers[i].value : "");
@@ -180,35 +387,49 @@ void LuaRuntime::PushMessage(const torustiq_message& message) {
     lua_setfield(state_, -2, "headers");
 }
 
-bool LuaRuntime::ReadMessage(lua_State* state, int index, LuaMessage& out, std::string& error) {
+bool LuaRuntime::ReadMessage(
+    lua_State* state, int index, uint32_t payload_kind, LuaMessage& out, std::string& error) {
     index = lua_absindex(state, index);
     out = LuaMessage{};
     const int type = lua_type(state, index);
     size_t length = 0;
-    if (type == LUA_TSTRING || type == LUA_TNUMBER) {
+    const bool structured = payload_kind == TORUSTIQ_PAYLOAD_VALUE;
+    if (!structured && (type == LUA_TSTRING || type == LUA_TNUMBER)) {
         const char* text = lua_tolstring(state, index, &length);
-        out.body.assign(text, length);
+        out.payload.text.assign(text, length);
         return true;
     }
     if (type != LUA_TTABLE) {
-        error =
-            std::string("a message must be a table or a string, got ") + lua_typename(state, type);
+        error = std::string(structured ? "a message must be a table, got "
+                                       : "a message must be a table or a string, got ") +
+                lua_typename(state, type);
         return false;
     }
 
-    lua_pushliteral(state, "body");
-    lua_rawget(state, index);
-    const int body_type = lua_type(state, -1);
-    if (body_type == LUA_TSTRING || body_type == LUA_TNUMBER) {
-        const char* text = lua_tolstring(state, -1, &length);
-        out.body.assign(text, length);
-    } else if (body_type != LUA_TNIL) {
-        error =
-            std::string("message 'body' must be a string, got ") + lua_typename(state, body_type);
+    if (structured) {
+        lua_pushliteral(state, "value");
+        lua_rawget(state, index);
+        const bool ok = ReadValue(state, -1, 0, out.payload, error);
         lua_pop(state, 1);
-        return false;
+        if (!ok) {
+            error = "message 'value': " + error;
+            return false;
+        }
+    } else {
+        lua_pushliteral(state, "body");
+        lua_rawget(state, index);
+        const int body_type = lua_type(state, -1);
+        if (body_type == LUA_TSTRING || body_type == LUA_TNUMBER) {
+            const char* text = lua_tolstring(state, -1, &length);
+            out.payload.text.assign(text, length);
+        } else if (body_type != LUA_TNIL) {
+            error = std::string("message 'body' must be a string, got ") +
+                    lua_typename(state, body_type);
+            lua_pop(state, 1);
+            return false;
+        }
+        lua_pop(state, 1);
     }
-    lua_pop(state, 1);
 
     lua_pushliteral(state, "headers");
     lua_rawget(state, index);
@@ -244,6 +465,7 @@ bool LuaRuntime::ReadMessage(lua_State* state, int index, LuaMessage& out, std::
 
 bool LuaRuntime::ReadMessages(lua_State* state,
                               int index,
+                              uint32_t payload_kind,
                               std::vector<LuaMessage>& out,
                               std::string& error) {
     index = lua_absindex(state, index);
@@ -257,7 +479,7 @@ bool LuaRuntime::ReadMessages(lua_State* state,
         for (lua_Unsigned i = 1; i <= count; ++i) {
             lua_rawgeti(state, index, static_cast<lua_Integer>(i));
             LuaMessage message;
-            const bool ok = ReadMessage(state, -1, message, error);
+            const bool ok = ReadMessage(state, -1, payload_kind, message, error);
             lua_pop(state, 1);
             if (!ok) {
                 return false;
@@ -267,7 +489,7 @@ bool LuaRuntime::ReadMessages(lua_State* state,
         return true;
     }
     LuaMessage message;
-    if (!ReadMessage(state, index, message, error)) {
+    if (!ReadMessage(state, index, payload_kind, message, error)) {
         return false;
     }
     out.push_back(std::move(message));

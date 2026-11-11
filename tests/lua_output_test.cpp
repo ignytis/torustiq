@@ -52,5 +52,26 @@ TEST_F(LuaOutputTest, OutputFlushIsOptionalAndErrorsAreReported) {
     EXPECT_EQ(Create(vt, {{"script", "function process() end"}}), nullptr); // needs write()
 }
 
+TEST_F(LuaOutputTest, StructuredPayloadIsExposedAsValue) {
+    const auto* vt = registry_.FindOutput("lua");
+    void* handle = Create(vt,
+                          {{"script", R"(
+        function write(msg)
+          assert(msg.body == nil)
+          print(msg.value.name, #msg.value.list, msg.value.list[2])
+        end)"}},
+                          TORUSTIQ_PAYLOAD_VALUE);
+    ASSERT_NE(handle, nullptr);
+    Message m;
+    m.payload =
+        Value(Value::Map{{"name", Value("n")},
+                         {"list", Value(Value::Array{Value(int64_t{10}), Value(int64_t{20})})}});
+    MessageView view(m);
+    testing::internal::CaptureStdout();
+    EXPECT_EQ(vt->write(handle, &view.get()), TORUSTIQ_OK);
+    EXPECT_EQ(testing::internal::GetCapturedStdout(), "n\t2\t20\n");
+    vt->destroy(handle);
+}
+
 } // namespace
 } // namespace torustiq

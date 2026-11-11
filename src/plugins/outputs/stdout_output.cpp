@@ -15,8 +15,9 @@ std::string FormatMessage(const std::string& format, const torustiq_message& mes
     size_t i = 0;
     while (i < format.size()) {
         if (format.compare(i, kBody.size(), kBody) == 0) {
-            if (message.body.data != nullptr) {
-                result.append(reinterpret_cast<const char*>(message.body.data), message.body.len);
+            const torustiq_bytes& body = message.payload.as.bytes;
+            if (body.data != nullptr) {
+                result.append(reinterpret_cast<const char*>(body.data), body.len);
             }
             i += kBody.size();
         } else if (format.compare(i, kHeaderPrefix.size(), kHeaderPrefix) == 0) {
@@ -49,7 +50,11 @@ struct StdoutOutput {
     std::string format;
 };
 
-int32_t Create(const torustiq_config* config, void** out_handle) {
+int32_t
+Create(const torustiq_config* config, const torustiq_payload_spec* input, void** out_handle) {
+    if (input->kind != TORUSTIQ_PAYLOAD_BYTES) {
+        return TORUSTIQ_UNSUPPORTED_PAYLOAD;
+    }
     try {
         auto* output = new StdoutOutput();
         output->format = torustiq::ConfigGet(config, "format", "%BODY%");

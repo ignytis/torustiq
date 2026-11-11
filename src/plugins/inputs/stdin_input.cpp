@@ -10,8 +10,9 @@ struct StdinInput {
     std::atomic<bool> stopped{false};
 };
 
-int32_t Create(const torustiq_config*, void** out_handle) {
+int32_t Create(const torustiq_config*, torustiq_payload_spec* out_output, void** out_handle) {
     try {
+        out_output->kind = TORUSTIQ_PAYLOAD_BYTES;
         *out_handle = new StdinInput();
         return TORUSTIQ_OK;
     } catch (...) {
@@ -25,8 +26,8 @@ int32_t Run(void* handle, torustiq_emit_fn emit, void* user_data) {
         std::string line;
         while (!self->stopped.load() && std::getline(std::cin, line)) {
             torustiq_message message{};
-            message.body.data = reinterpret_cast<const uint8_t*>(line.data());
-            message.body.len = line.size();
+            message.payload = torustiq_value_from_bytes(
+                reinterpret_cast<const uint8_t*>(line.data()), line.size());
             const int32_t status = emit(user_data, &message);
             if (status != TORUSTIQ_OK) {
                 return status == TORUSTIQ_STOPPED ? TORUSTIQ_OK : status;

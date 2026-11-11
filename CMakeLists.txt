@@ -39,6 +39,16 @@ if(NOT CLI11_FOUND)
     FetchContent_MakeAvailable(CLI11)
 endif()
 
+find_package(nlohmann_json 3.11 QUIET)
+if(NOT nlohmann_json_FOUND)
+    set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+    set(JSON_Install OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3)
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
+
 function(torustiq_set_warnings target)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4)
@@ -101,10 +111,12 @@ set(TORUSTIQ_PLUGIN_SOURCES
     src/plugins/builtin_plugins.cpp
     src/plugins/inputs/directory_input.cpp
     src/plugins/inputs/stdin_input.cpp
+    src/plugins/transforms/json_transforms.cpp
     src/plugins/outputs/stdout_output.cpp)
 add_library(torustiq_plugins STATIC ${TORUSTIQ_PLUGIN_SOURCES})
 target_include_directories(torustiq_plugins PUBLIC src)
 target_link_libraries(torustiq_plugins PUBLIC torustiq::sdk torustiq_core)
+target_link_libraries(torustiq_plugins PRIVATE nlohmann_json::nlohmann_json)
 if(TORUSTIQ_WITH_LUA)
     target_sources(torustiq_plugins PRIVATE
         src/plugins/_common/lua/lua_plugin.cpp

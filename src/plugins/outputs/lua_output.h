@@ -10,7 +10,8 @@ extern "C" {
 //   function write(msg)  -- consume a message (e.g. print it)
 //   function flush()     -- optional; called once when the stream ends
 //
-// A message is a table {body = "bytes", headers = {key = "value"}}.
+// A message is a table {body = "bytes", headers = {key = "value"}}; a structured payload arrives as
+// {value = <table or scalar>, headers = {...}}.
 int32_t torustiq_register_lua_output(const torustiq_registrar* registrar);
 }
 

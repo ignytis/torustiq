@@ -5,6 +5,7 @@
 #include "plugins/inputs/directory_input.h"
 #include "plugins/inputs/stdin_input.h"
 #include "plugins/outputs/stdout_output.h"
+#include "plugins/transforms/json_transforms.h"
 #ifdef TORUSTIQ_WITH_LUA
 #include "plugins/inputs/lua_input.h"
 #include "plugins/outputs/lua_output.h"
@@ -19,6 +20,7 @@ void RegisterBuiltinPlugins(PluginRegistry& registry) {
              torustiq_register_stdin_input,
              torustiq_register_directory_input,
              torustiq_register_stdout_output,
+             torustiq_register_json_transforms,
 #ifdef TORUSTIQ_WITH_LUA
              torustiq_register_lua_input,
              torustiq_register_lua_transform,

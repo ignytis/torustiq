@@ -21,7 +21,9 @@ std::vector<std::string> ReadAll(const std::string& input) {
     EXPECT_EQ(torustiq_register_stdin_input(&registrar), TORUSTIQ_OK);
     const auto* vt = registry.FindInput("stdin");
     void* handle = nullptr;
-    EXPECT_EQ(vt->create(nullptr, &handle), TORUSTIQ_OK);
+    torustiq_payload_spec spec{};
+    EXPECT_EQ(vt->create(nullptr, &spec, &handle), TORUSTIQ_OK);
+    EXPECT_EQ(spec.kind, TORUSTIQ_PAYLOAD_BYTES);
 
     std::istringstream in(input);
     std::streambuf* old = std::cin.rdbuf(in.rdbuf());
@@ -32,7 +34,7 @@ std::vector<std::string> ReadAll(const std::string& input) {
 
     std::vector<std::string> lines;
     for (const Message& m : messages) {
-        lines.emplace_back(m.body.begin(), m.body.end());
+        lines.push_back(BodyText(m));
     }
     return lines;
 }
@@ -53,7 +55,8 @@ TEST(StdinInputTest, StopBeforeRunProducesNothing) {
     torustiq_register_stdin_input(&registrar);
     const auto* vt = registry.FindInput("stdin");
     void* handle = nullptr;
-    vt->create(nullptr, &handle);
+    torustiq_payload_spec spec{};
+    vt->create(nullptr, &spec, &handle);
     vt->stop(handle);
     std::istringstream in("a\nb\n");
     std::streambuf* old = std::cin.rdbuf(in.rdbuf());

@@ -43,7 +43,8 @@ class DirectoryInputTest : public ::testing::Test {
         std::map<std::string, std::string> params = {{"path", path}};
         ConfigView config(params);
         void* handle = nullptr;
-        EXPECT_EQ(vtable_->create(&config.get(), &handle), TORUSTIQ_OK);
+        torustiq_payload_spec spec{};
+        EXPECT_EQ(vtable_->create(&config.get(), &spec, &handle), TORUSTIQ_OK);
         const int32_t status = vtable_->run(handle, Collect, &out);
         vtable_->destroy(handle);
         return status;
@@ -62,9 +63,9 @@ TEST_F(DirectoryInputTest, EachFileIsARecordSortedByName) {
     ASSERT_EQ(Run(messages, dir_.string()), TORUSTIQ_OK);
     ASSERT_EQ(messages.size(), 2u);
     EXPECT_EQ(messages[0].headers["filename"], "a.txt");
-    EXPECT_EQ(messages[0].body.size(), 6u);
+    EXPECT_EQ(std::get<Bytes>(messages[0].payload.data).size(), 6u);
     EXPECT_EQ(messages[1].headers["filename"], "b.txt");
-    EXPECT_EQ(std::string(messages[1].body.begin(), messages[1].body.end()), "second");
+    EXPECT_EQ(BodyText(messages[1]), "second");
 }
 
 TEST_F(DirectoryInputTest, EmptyDirectoryAndEmptyFile) {
@@ -74,7 +75,7 @@ TEST_F(DirectoryInputTest, EmptyDirectoryAndEmptyFile) {
     Write("empty", "");
     ASSERT_EQ(Run(messages, dir_.string()), TORUSTIQ_OK);
     ASSERT_EQ(messages.size(), 1u);
-    EXPECT_TRUE(messages[0].body.empty());
+    EXPECT_TRUE(std::get<Bytes>(messages[0].payload.data).empty());
 }
 
 TEST_F(DirectoryInputTest, MissingDirectoryIsAnError) {
@@ -85,7 +86,8 @@ TEST_F(DirectoryInputTest, MissingDirectoryIsAnError) {
 TEST_F(DirectoryInputTest, MissingPathConfigFailsCreate) {
     void* handle = nullptr;
     torustiq_config empty{};
-    EXPECT_EQ(vtable_->create(&empty, &handle), TORUSTIQ_ERROR);
+    torustiq_payload_spec spec{};
+    EXPECT_EQ(vtable_->create(&empty, &spec, &handle), TORUSTIQ_ERROR);
 }
 
 } // namespace

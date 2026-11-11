@@ -54,6 +54,10 @@ torustiq_add_test(pipeline_test
                   SOURCES ${SRC}/core/pipeline.cpp ${SRC}/core/pipeline_config.cpp
                           ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp
                   LIBS yaml-cpp::yaml-cpp)
+torustiq_add_test(json_transforms_test
+                  SOURCES ${SRC}/plugins/transforms/json_transforms.cpp ${SRC}/core/message.cpp
+                          ${SRC}/core/plugin_registry.cpp
+                  LIBS nlohmann_json::nlohmann_json)
 torustiq_add_test(stdout_output_test SOURCES ${SRC}/plugins/outputs/stdout_output.cpp
                   ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp)
 torustiq_add_test(stdin_input_test SOURCES ${SRC}/plugins/inputs/stdin_input.cpp

@@ -10,6 +10,9 @@ extern "C" {
 //   function process(msg)  -- return nil/false (drop), a message, or a list of messages
 //
 // A message is a table {body = "bytes", headers = {key = "value"}}; a plain string means body only.
+// For a structured payload it is {value = <table or scalar>, headers = {...}} instead (the global
+// `null` is a null member). Parameter `payload` ("bytes" or "value") sets the emitted kind; it
+// defaults to the received kind.
 int32_t torustiq_register_lua_transform(const torustiq_registrar* registrar);
 }
 

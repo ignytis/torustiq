@@ -24,13 +24,13 @@ inline int32_t Collect(void* user_data, const torustiq_message* m) {
 }
 
 inline std::string BodyOf(const Message& m) {
-    return std::string(m.body.begin(), m.body.end());
+    return BodyText(m);
 }
 
 inline Message MakeMessage(const std::string& body,
                            std::map<std::string, std::string> headers = {}) {
     Message m;
-    m.body.assign(body.begin(), body.end());
+    m.payload = Value(Bytes(body.begin(), body.end()));
     m.headers = std::move(headers);
     return m;
 }
@@ -43,16 +43,32 @@ class LuaTestBase : public ::testing::Test {
         ASSERT_EQ(register_fn(&registrar), TORUSTIQ_OK);
     }
 
-    // Creates a plugin with the given params; returns the handle or nullptr.
-    template <typename VTable> void* Create(const VTable* vt, const Params& params) {
+    // Creates a plugin with the given params; returns the handle or nullptr. A transform or
+    // output receives `input_kind`; the emitted kind is stored in `emitted_` (input, transform).
+    void* Create(const torustiq_input_vtable* vt, const Params& params) {
         ConfigView config(params);
         void* handle = nullptr;
-        if (vt->create(&config.get(), &handle) != TORUSTIQ_OK) {
-            return nullptr;
-        }
-        return handle;
+        return vt->create(&config.get(), &emitted_, &handle) == TORUSTIQ_OK ? handle : nullptr;
+    }
+    void* Create(const torustiq_transform_vtable* vt,
+                 const Params& params,
+                 uint32_t input_kind = TORUSTIQ_PAYLOAD_BYTES) {
+        ConfigView config(params);
+        void* handle = nullptr;
+        const torustiq_payload_spec input{input_kind};
+        return vt->create(&config.get(), &input, &emitted_, &handle) == TORUSTIQ_OK ? handle
+                                                                                    : nullptr;
+    }
+    void* Create(const torustiq_output_vtable* vt,
+                 const Params& params,
+                 uint32_t input_kind = TORUSTIQ_PAYLOAD_BYTES) {
+        ConfigView config(params);
+        void* handle = nullptr;
+        const torustiq_payload_spec input{input_kind};
+        return vt->create(&config.get(), &input, &handle) == TORUSTIQ_OK ? handle : nullptr;
     }
 
+    torustiq_payload_spec emitted_{};
     PluginRegistry registry_;
 };
 

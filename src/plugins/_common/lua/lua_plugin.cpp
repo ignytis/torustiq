@@ -1,6 +1,7 @@
 #include "plugins/_common/lua/lua_plugin.h"
 
 #include <iostream>
+#include <string_view>
 
 namespace torustiq::plugins {
 
@@ -23,6 +24,24 @@ int32_t CreateLuaPlugin(const torustiq_config* config,
         std::cerr << e.what() << "\n";
         return TORUSTIQ_ERROR;
     }
+}
+
+int32_t ParseLuaPayloadKind(const torustiq_config* config,
+                            const char* kind,
+                            uint32_t default_kind,
+                            uint32_t* out_kind) {
+    const char* value = torustiq_config_get(config, "payload");
+    if (value == nullptr) {
+        *out_kind = default_kind;
+    } else if (std::string_view(value) == "bytes") {
+        *out_kind = TORUSTIQ_PAYLOAD_BYTES;
+    } else if (std::string_view(value) == "value") {
+        *out_kind = TORUSTIQ_PAYLOAD_VALUE;
+    } else {
+        std::cerr << kind << ": 'payload' must be 'bytes' or 'value', got '" << value << "'\n";
+        return TORUSTIQ_ERROR;
+    }
+    return TORUSTIQ_OK;
 }
 
 void DestroyLuaPlugin(void* handle) {

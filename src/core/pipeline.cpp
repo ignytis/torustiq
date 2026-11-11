@@ -11,6 +11,10 @@
 namespace torustiq {
 namespace {
 constexpr size_t kQueueCapacity = 256;
+
+const char* PayloadKindName(uint32_t kind) {
+    return kind == TORUSTIQ_PAYLOAD_BYTES ? "bytes" : "structured";
+}
 } // namespace
 
 enum class NodeKind { kInput, kTransform, kOutput };
@@ -42,6 +46,7 @@ struct PipelineNode {
     torustiq_transform_vtable transform{};
     torustiq_output_vtable output{};
     void* handle = nullptr;
+    torustiq_payload_spec output_spec{TORUSTIQ_PAYLOAD_BYTES}; // what this node emits
 
     BoundedQueue<Message> queue;          // incoming messages (unused for inputs)
     std::vector<PipelineNode*> consumers; // downstream nodes
@@ -56,7 +61,17 @@ int32_t Emit(void* user_data, const torustiq_message* message) {
         return TORUSTIQ_ERROR;
     }
     auto* node = static_cast<PipelineNode*>(user_data);
-    Message copy = MessageFromC(*message);
+    // The payload kind was agreed when the pipeline was built; this only catches a plugin that
+    // breaks its own contract.
+    if (PayloadKindOf(message->payload) != node->output_spec.kind) {
+        return TORUSTIQ_ERROR;
+    }
+    Message copy;
+    try {
+        copy = MessageFromC(*message);
+    } catch (const std::exception&) { // never let an exception cross the C boundary
+        return TORUSTIQ_ERROR;
+    }
     bool stopped = false;
     for (size_t i = 0; i < node->consumers.size(); ++i) {
         const bool last = i + 1 == node->consumers.size();
@@ -77,6 +92,34 @@ Pipeline::Pipeline(const PipelineConfig& config, const PluginRegistry& registry)
             throw std::runtime_error("duplicate component id '" + component.id + "'");
         }
         auto node = std::make_unique<PipelineNode>(kind, component.id);
+
+        // Resolve upstream steps first: their output specs are this step's input spec.
+        std::vector<PipelineNode*> upstreams;
+        for (const std::string& upstream_id : component.inputs) {
+            auto it = by_id.find(upstream_id);
+            if (it == by_id.end() || it->second->kind == NodeKind::kOutput) {
+                throw std::runtime_error("'" + component.id + "': invalid input '" + upstream_id +
+                                         "'");
+            }
+            upstreams.push_back(it->second);
+        }
+        if (kind != NodeKind::kInput && upstreams.empty()) {
+            throw std::runtime_error("'" + component.id + "' has no inputs");
+        }
+        torustiq_payload_spec input_spec{TORUSTIQ_PAYLOAD_BYTES};
+        if (!upstreams.empty()) {
+            input_spec = upstreams.front()->output_spec;
+            for (const PipelineNode* upstream : upstreams) {
+                if (upstream->output_spec.kind != input_spec.kind) {
+                    throw std::runtime_error(
+                        "'" + component.id + "' receives different payload kinds: '" +
+                        upstreams.front()->id + "' emits " + PayloadKindName(input_spec.kind) +
+                        ", '" + upstream->id + "' emits " +
+                        PayloadKindName(upstream->output_spec.kind));
+                }
+            }
+        }
+
         ConfigView params(component.config);
         int32_t status = TORUSTIQ_ERROR;
         switch (kind) {
@@ -87,7 +130,7 @@ Pipeline::Pipeline(const PipelineConfig& config, const PluginRegistry& registry)
                                          component.id + "'");
             }
             node->input = *vtable;
-            status = vtable->create(&params.get(), &node->handle);
+            status = vtable->create(&params.get(), &node->output_spec, &node->handle);
             break;
         }
         case NodeKind::kTransform: {
@@ -97,7 +140,7 @@ Pipeline::Pipeline(const PipelineConfig& config, const PluginRegistry& registry)
                                          component.id + "'");
             }
             node->transform = *vtable;
-            status = vtable->create(&params.get(), &node->handle);
+            status = vtable->create(&params.get(), &input_spec, &node->output_spec, &node->handle);
             break;
         }
         case NodeKind::kOutput: {
@@ -107,29 +150,32 @@ Pipeline::Pipeline(const PipelineConfig& config, const PluginRegistry& registry)
                                          component.id + "'");
             }
             node->output = *vtable;
-            status = vtable->create(&params.get(), &node->handle);
+            status = vtable->create(&params.get(), &input_spec, &node->handle);
             break;
         }
         }
         if (status != TORUSTIQ_OK) {
             node->handle = nullptr; // a failed create() has nothing to destroy
+            if (status == TORUSTIQ_UNSUPPORTED_PAYLOAD) {
+                throw std::runtime_error("'" + component.id + "' (" + component.type +
+                                         ") does not accept " + PayloadKindName(input_spec.kind) +
+                                         " payloads from '" + upstreams.front()->id +
+                                         "'; add a conversion step (e.g. decode_json or "
+                                         "encode_json) between them");
+            }
             throw std::runtime_error("failed to initialise '" + component.id + "' (" +
                                      component.type + ")");
+        }
+        if (kind != NodeKind::kOutput && node->output_spec.kind != TORUSTIQ_PAYLOAD_BYTES &&
+            node->output_spec.kind != TORUSTIQ_PAYLOAD_VALUE) {
+            throw std::runtime_error("'" + component.id + "' declared an unknown payload kind");
         }
         PipelineNode* raw = node.get();
         by_id[component.id] = raw;
         nodes_.push_back(std::move(node));
-        for (const std::string& upstream_id : component.inputs) {
-            auto it = by_id.find(upstream_id);
-            if (it == by_id.end() || it->second->kind == NodeKind::kOutput) {
-                throw std::runtime_error("'" + component.id + "': invalid input '" + upstream_id +
-                                         "'");
-            }
-            it->second->consumers.push_back(raw);
+        for (PipelineNode* upstream : upstreams) {
+            upstream->consumers.push_back(raw);
             raw->producers_left++;
-        }
-        if (kind != NodeKind::kInput && component.inputs.empty()) {
-            throw std::runtime_error("'" + component.id + "' has no inputs");
         }
     };
 

@@ -11,6 +11,8 @@ extern "C" {
 //                        -- no more data. `sleep(seconds)` is available.
 //
 // A message is a table {body = "bytes", headers = {key = "value"}}; a plain string means body only.
+// Parameter `payload` = "value" makes the input emit structured messages {value = ..., headers =
+// {...}} instead (default "bytes").
 int32_t torustiq_register_lua_input(const torustiq_registrar* registrar);
 }
 

@@ -1,0 +1,53 @@
+# Structured payloads: the JSON document is parsed once (decode_json), two Lua transforms edit its
+# attributes directly, and it is serialised once (encode_json).
+# Run: build/torustiq examples/json_pipeline.yaml
+#
+# Payload kinds are agreed when the pipeline is built: `generator` emits bytes, `decode_json`
+# turns them into a structured value, the Lua transforms receive and emit that value (msg.value),
+# `encode_json` turns it back into bytes for `stdout`. A step that cannot handle the kind it
+# receives makes the pipeline fail at startup, naming the step.
+name: JSON pipeline
+
+inputs:
+  generator:
+    type: lua
+    config:
+      count: 3
+      script: |
+        function run(emit)
+          for i = 1, tonumber(config.count) do
+            emit({ body = string.format('{"id": %d, "user": {"name": "user%d"}}', i, i) })
+          end
+        end
+
+transforms:
+  parse:
+    type: decode_json
+    inputs: [generator]
+  uppercase_name:
+    type: lua
+    inputs: [parse]
+    config:
+      script: |
+        function process(msg)
+          msg.value.user.name = msg.value.user.name:upper()
+          return msg
+        end
+  add_fields:
+    type: lua
+    inputs: [uppercase_name]
+    config:
+      script: |
+        function process(msg)
+          msg.value.seen = msg.value.id * 10
+          msg.value.tags = { "checked", "v" .. msg.value.id }
+          return msg
+        end
+  serialize:
+    type: encode_json
+    inputs: [add_fields]
+
+outputs:
+  console:
+    type: stdout
+    inputs: [serialize]

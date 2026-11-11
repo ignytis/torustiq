@@ -12,7 +12,8 @@ pipeline definition and runs it: one or more inputs, zero or more transforms, on
   threaded `pipeline` runner. Must not depend on concrete plugins.
 - `src/plugins/` — built-in plugins, grouped by kind. They must use **only** the SDK C API
   (`torustiq/sdk.h`), exactly like external plugins will:
-  - `inputs/` (`stdin`, `directory`, `lua_input`), `transforms/` (`lua_transform`), `outputs/` (`stdout`, `lua_output`);
+  - `inputs/` (`stdin`, `directory`, `lua_input`), `transforms/` (`lua_transform`, `json_transforms`),
+    `outputs/` (`stdout`, `lua_output`);
   - `_common/` — code shared between plugins, not a plugin kind (`_common/lua/`: sandboxed `LuaRuntime`, `LuaPlugin` base);
   - `builtin_plugins.cpp` registers everything; each plugin exports a `torustiq_register_*` function.
   New plugin → put it in the directory of its kind and list it in `builtin_plugins.cpp` and `CMakeLists.txt`.
@@ -24,6 +25,10 @@ pipeline definition and runs it: one or more inputs, zero or more transforms, on
   `TORUSTIQ_DEV_MODE`, on by default in Debug; otherwise `~/.torustiq`); `TORUSTIQ_PLUGINS_DIR` defaults to
   `TORUSTIQ_HOME/plugins`. A dev build never looks outside the project unless the variables are set. `dev/` is gitignored. Sample plugins live in the `torustiq-plugins` project
   (`scripts/link_dev.sh` symlinks them; examples are in that project's `examples/`).
+- Payloads: `Message::payload` is a `Value` (bytes = simple data, anything else = structured). Payload
+  kinds are negotiated in `Pipeline`'s constructor: `create` gets the upstream `torustiq_payload_spec` and
+  declares its own; `TORUSTIQ_UNSUPPORTED_PAYLOAD` becomes a startup error. Plugins must not check the kind
+  per message. Kind conversion is done by ordinary transform steps (`decode_json`, `encode_json`).
 - `tests/` — one `<unit>_test.cpp` per unit (GoogleTest); each test target compiles only the sources it needs.
 - `examples/` — sample pipelines.
 - The plugin SDK is a **separate project** (`torustiq-sdk`), fetched via `FetchContent`. API changes go there

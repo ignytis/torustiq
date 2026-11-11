@@ -5,7 +5,7 @@
 namespace torustiq {
 namespace {
 
-int32_t Create(const torustiq_config*, void**) {
+int32_t Create(const torustiq_config*, torustiq_payload_spec*, void**) {
     return TORUSTIQ_OK;
 }
 int32_t Run(void*, torustiq_emit_fn, void*) {

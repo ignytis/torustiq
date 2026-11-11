@@ -20,8 +20,10 @@ struct DirectoryInput {
     std::atomic<bool> stopped{false};
 };
 
-int32_t Create(const torustiq_config* config, void** out_handle) {
+int32_t
+Create(const torustiq_config* config, torustiq_payload_spec* out_output, void** out_handle) {
     try {
+        out_output->kind = TORUSTIQ_PAYLOAD_BYTES;
         const std::string path = torustiq::ConfigGet(config, "path");
         if (path.empty()) {
             std::cerr << "directory input: 'path' is required\n";
@@ -69,8 +71,8 @@ int32_t Run(void* handle, torustiq_emit_fn emit, void* user_data) {
             const torustiq_header headers[] = {{"filename", filename.c_str()},
                                                {"path", full_path.c_str()}};
             torustiq_message message{};
-            message.body.data = reinterpret_cast<const uint8_t*>(content.data());
-            message.body.len = content.size();
+            message.payload = torustiq_value_from_bytes(
+                reinterpret_cast<const uint8_t*>(content.data()), content.size());
             message.headers = headers;
             message.header_count = 2;
             const int32_t status = emit(user_data, &message);

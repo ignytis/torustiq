@@ -101,10 +101,11 @@ TEST_F(PluginLoaderTest, LoadInitialisesOnceAndRegistersComponent) {
     // Step-level init: every `create` call gives a distinct handle.
     const torustiq_output_vtable* vtable = registry.FindOutput("fake_a");
     const torustiq_config config{nullptr, 0};
+    const torustiq_payload_spec input{TORUSTIQ_PAYLOAD_BYTES};
     void* first = nullptr;
     void* second = nullptr;
-    ASSERT_EQ(vtable->create(&config, &first), TORUSTIQ_OK);
-    ASSERT_EQ(vtable->create(&config, &second), TORUSTIQ_OK);
+    ASSERT_EQ(vtable->create(&config, &input, &first), TORUSTIQ_OK);
+    ASSERT_EQ(vtable->create(&config, &input, &second), TORUSTIQ_OK);
     EXPECT_NE(first, second);
     vtable->destroy(first);
     vtable->destroy(second);

@@ -12,7 +12,7 @@ namespace {
 
 Message Sample() {
     Message m;
-    m.body = {'h', 'i'};
+    m.payload = Value(Bytes{'h', 'i'});
     m.headers = {{"some_header", "v"}};
     return m;
 }
@@ -39,7 +39,7 @@ TEST(FormatMessageTest, LiteralsAndMalformedPlaceholders) {
 
 TEST(FormatMessageTest, BodyWithEmbeddedNul) {
     Message m;
-    m.body = {'a', 0, 'b'};
+    m.payload = Value(Bytes{'a', 0, 'b'});
     EXPECT_EQ(Format("%BODY%", m), std::string("a\0b", 3));
 }
 
@@ -53,7 +53,8 @@ TEST(StdoutPluginTest, WritesFormattedLines) {
     std::map<std::string, std::string> params = {{"format", "<%BODY%>"}};
     ConfigView config(params);
     void* handle = nullptr;
-    ASSERT_EQ(vt->create(&config.get(), &handle), TORUSTIQ_OK);
+    const torustiq_payload_spec input{TORUSTIQ_PAYLOAD_BYTES};
+    ASSERT_EQ(vt->create(&config.get(), &input, &handle), TORUSTIQ_OK);
 
     std::ostringstream captured;
     std::streambuf* old = std::cout.rdbuf(captured.rdbuf());
@@ -65,6 +66,16 @@ TEST(StdoutPluginTest, WritesFormattedLines) {
     vt->destroy(handle);
 
     EXPECT_EQ(captured.str(), "<hi>\n");
+}
+
+TEST(StdoutPluginTest, RejectsStructuredPayload) {
+    PluginRegistry registry;
+    const torustiq_registrar registrar = registry.registrar();
+    ASSERT_EQ(torustiq_register_stdout_output(&registrar), TORUSTIQ_OK);
+    const auto* vt = registry.FindOutput("stdout");
+    void* handle = nullptr;
+    const torustiq_payload_spec input{TORUSTIQ_PAYLOAD_VALUE};
+    EXPECT_EQ(vt->create(nullptr, &input, &handle), TORUSTIQ_UNSUPPORTED_PAYLOAD);
 }
 
 } // namespace torustiq

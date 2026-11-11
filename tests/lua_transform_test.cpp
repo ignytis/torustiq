@@ -149,7 +149,7 @@ TEST_F(LuaTransformTest, MetatableTricksCannotCrashTheHost) {
                         out),
               TORUSTIQ_OK);
     ASSERT_EQ(out.messages.size(), 1u);
-    EXPECT_TRUE(out.messages[0].body.empty());
+    EXPECT_TRUE(std::get<Bytes>(out.messages[0].payload.data).empty());
     // Breaking the globals table must produce an error, not a panic.
     EXPECT_EQ(Transform({{"script", R"(
         setmetatable(_G, { __index = function() error('nope') end })
@@ -267,6 +267,124 @@ TEST_F(LuaTransformTest, TransformKeepsStateBetweenMessages) {
     }
     vt->destroy(handle);
     EXPECT_EQ(BodyOf(out.messages[2]), "3");
+}
+
+// --- structured payloads ---
+
+Message StructuredMessage() {
+    Message m;
+    m.payload = Value(
+        Value::Map{{"user", Value(Value::Map{{"name", Value("bob")}, {"age", Value(int64_t{7})}})},
+                   {"tags", Value(Value::Array{Value("a"), Value(true), Value(), Value(1.5)})}});
+    m.headers = {{"h", "v"}};
+    return m;
+}
+
+TEST_F(LuaTransformTest, StructuredPayloadIsATableAndKeepsItsKind) {
+    const auto* vt = registry_.FindTransform("lua");
+    void* handle = Create(vt,
+                          {{"script", R"(
+        function process(m)
+          assert(m.body == nil)
+          m.value.user.name = m.value.user.name:upper()
+          m.value.user.age = m.value.user.age + 1
+          m.value.tags[5] = "new"
+          assert(m.value.tags[3] == null)
+          assert(math.type(m.value.user.age) == "integer")
+          assert(math.type(m.value.tags[4]) == "float")
+          return m
+        end)"}},
+                          TORUSTIQ_PAYLOAD_VALUE);
+    ASSERT_NE(handle, nullptr);
+    EXPECT_EQ(emitted_.kind, TORUSTIQ_PAYLOAD_VALUE); // emits what it receives by default
+
+    Collector out;
+    MessageView view(StructuredMessage());
+    ASSERT_EQ(vt->process(handle, &view.get(), Collect, &out), TORUSTIQ_OK);
+    vt->destroy(handle);
+    ASSERT_EQ(out.messages.size(), 1u);
+    EXPECT_EQ(out.messages[0].headers, StructuredMessage().headers);
+    EXPECT_EQ(out.messages[0].payload,
+              Value(Value::Map{
+                  {"tags",
+                   Value(Value::Array{Value("a"), Value(true), Value(), Value(1.5), Value("new")})},
+                  {"user",
+                   Value(Value::Map{{"age", Value(int64_t{8})},
+                                    {"name", Value("BOB")}})}})); // members sorted by key
+}
+
+TEST_F(LuaTransformTest, ScriptCanBuildAValueFromBytes) {
+    const auto* vt = registry_.FindTransform("lua");
+    void* handle = Create(vt, {{"payload", "value"}, {"script", R"(
+        function process(m) return { value = { len = #m.body, ok = true, none = null } } end)"}});
+    ASSERT_NE(handle, nullptr);
+    EXPECT_EQ(emitted_.kind, TORUSTIQ_PAYLOAD_VALUE);
+    Collector out;
+    MessageView view(MakeMessage("abcd"));
+    ASSERT_EQ(vt->process(handle, &view.get(), Collect, &out), TORUSTIQ_OK);
+    vt->destroy(handle);
+    EXPECT_EQ(
+        out.messages.at(0).payload,
+        Value(Value::Map{{"len", Value(int64_t{4})}, {"none", Value()}, {"ok", Value(true)}}));
+}
+
+TEST_F(LuaTransformTest, ScriptCanTurnAValueIntoBytes) {
+    const auto* vt = registry_.FindTransform("lua");
+    void* handle = Create(
+        vt,
+        {{"payload", "bytes"}, {"script", "function process(m) return m.value.user.name end"}},
+        TORUSTIQ_PAYLOAD_VALUE);
+    ASSERT_NE(handle, nullptr);
+    EXPECT_EQ(emitted_.kind, TORUSTIQ_PAYLOAD_BYTES);
+    Collector out;
+    MessageView view(StructuredMessage());
+    ASSERT_EQ(vt->process(handle, &view.get(), Collect, &out), TORUSTIQ_OK);
+    vt->destroy(handle);
+    EXPECT_EQ(BodyOf(out.messages.at(0)), "bob");
+}
+
+TEST_F(LuaTransformTest, InvalidStructuredResultsFail) {
+    const auto* vt = registry_.FindTransform("lua");
+    for (const char* result : {"'text'",                             // not a message table
+                               "{ value = print }",                  // function
+                               "{ value = { 1, 2, x = 3 } }",        // mixed table
+                               "{ value = { [1.5] = 1, [2] = 2 } }", // non-string key
+                               "{ body = 'x' }"}) { // wrong payload field is a null value
+        void* handle =
+            Create(vt,
+                   {{"script", std::string("function process(m) return ") + result + " end"}},
+                   TORUSTIQ_PAYLOAD_VALUE);
+        ASSERT_NE(handle, nullptr) << result;
+        Collector out;
+        MessageView view(StructuredMessage());
+        const int32_t status = vt->process(handle, &view.get(), Collect, &out);
+        vt->destroy(handle);
+        if (std::string(result) == "{ body = 'x' }") {
+            EXPECT_EQ(status, TORUSTIQ_OK) << result;
+            ASSERT_EQ(out.messages.size(), 1u);
+            EXPECT_EQ(out.messages[0].payload, Value()); // no `value` member: null
+        } else {
+            EXPECT_EQ(status, TORUSTIQ_ERROR) << result;
+        }
+    }
+}
+
+TEST_F(LuaTransformTest, CyclicValueIsRejected) {
+    const auto* vt = registry_.FindTransform("lua");
+    void* handle =
+        Create(vt,
+               {{"script", "function process(m) local t = {} t.self = t return {value=t} end"}},
+               TORUSTIQ_PAYLOAD_VALUE);
+    ASSERT_NE(handle, nullptr);
+    Collector out;
+    MessageView view(StructuredMessage());
+    EXPECT_EQ(vt->process(handle, &view.get(), Collect, &out), TORUSTIQ_ERROR);
+    vt->destroy(handle);
+}
+
+TEST_F(LuaTransformTest, BadPayloadParameterFailsCreate) {
+    const auto* vt = registry_.FindTransform("lua");
+    EXPECT_EQ(Create(vt, {{"payload", "json"}, {"script", "function process() end"}}), nullptr);
 }
 
 } // namespace

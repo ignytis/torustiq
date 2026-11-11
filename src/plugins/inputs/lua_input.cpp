@@ -17,7 +17,7 @@ int LuaEmit(lua_State* state) {
     { // C++ objects must be gone before lua_error (it longjmps)
         LuaMessage message;
         std::string error;
-        if (!LuaRuntime::ReadMessage(state, 1, message, error)) {
+        if (!LuaRuntime::ReadMessage(state, 1, plugin->emit_kind, message, error)) {
             lua_pushlstring(state, error.data(), error.size());
             outcome = kRaise;
         } else {
@@ -55,10 +55,18 @@ int LuaSleep(lua_State* state) {
     return 0;
 }
 
-int32_t Create(const torustiq_config* config, void** out_handle) {
+int32_t
+Create(const torustiq_config* config, torustiq_payload_spec* out_output, void** out_handle) {
+    uint32_t kind = TORUSTIQ_PAYLOAD_BYTES;
+    if (ParseLuaPayloadKind(config, "lua input", TORUSTIQ_PAYLOAD_BYTES, &kind) != TORUSTIQ_OK) {
+        return TORUSTIQ_ERROR;
+    }
     const int32_t status = CreateLuaPlugin(config, "lua input", "run", out_handle);
     if (status == TORUSTIQ_OK) {
-        lua_State* state = static_cast<LuaPlugin*>(*out_handle)->runtime->state();
+        auto* plugin = static_cast<LuaPlugin*>(*out_handle);
+        plugin->emit_kind = kind;
+        out_output->kind = kind;
+        lua_State* state = plugin->runtime->state();
         lua_pushcfunction(state, LuaSleep);
         lua_setglobal(state, "sleep");
     }

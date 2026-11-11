@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <utility>
 #include <vector>
@@ -17,9 +18,23 @@ extern "C" {
 
 namespace torustiq::plugins {
 
-// A message as handled by Lua plugins.
+// An owning payload value as handled by Lua plugins; `kind` is a torustiq_value_kind.
+struct LuaValue {
+    uint32_t kind = TORUSTIQ_VALUE_NULL;
+    bool b = false;
+    int64_t i = 0;
+    double d = 0;
+    std::string text;                                      // STRING and BYTES
+    std::vector<LuaValue> items;                           // ARRAY
+    std::vector<std::pair<std::string, LuaValue>> entries; // MAP
+};
+
+// A message as handled by Lua plugins. The default payload is empty bytes.
 struct LuaMessage {
-    std::string body;
+    LuaMessage() {
+        payload.kind = TORUSTIQ_VALUE_BYTES;
+    }
+    LuaValue payload;
     std::vector<std::pair<std::string, std::string>> headers;
 };
 
@@ -35,7 +50,11 @@ class LuaMessageView {
     }
 
   private:
+    torustiq_value Build(const LuaValue& value);
+
     std::vector<torustiq_header> headers_;
+    std::deque<std::vector<torustiq_value>> arrays_;
+    std::deque<std::vector<torustiq_map_entry>> maps_;
     torustiq_message message_{};
 };
 
@@ -47,7 +66,8 @@ class LuaMessageView {
 //
 // Only the base (minus dofile/loadfile/load), string, table, math, utf8 and coroutine libraries
 // are available: no io, os, package or debug. The plugin parameters are exposed to the script as
-// the global table `config`.
+// the global table `config`. The global `null` is a sentinel for a null member of a structured
+// payload (a nil table member is simply absent).
 //
 // Not thread-safe, except RequestStop(). Lua errors are never allowed to propagate as C++
 // exceptions or longjmp across C++ frames holding objects with destructors.
@@ -88,19 +108,26 @@ class LuaRuntime {
     // On failure pops the error into `error` and returns false.
     bool Call(int nargs, int nresults, std::string& error);
 
-    // Pushes {body = <string>, headers = {key = value, ...}}.
+    // Pushes {body = <string>, headers = {...}} for a bytes payload, or {value = <table/scalar>,
+    // headers = {...}} for a structured one.
     void PushMessage(const torustiq_message& message);
 
-    // Reads a message from a string/number (body only) or a table {body=, headers=}. Uses raw
-    // accesses only, so it never runs Lua code.
-    static bool ReadMessage(lua_State* state, int index, LuaMessage& out, std::string& error);
+    // Reads a message whose payload has kind `payload_kind` (TORUSTIQ_PAYLOAD_BYTES: a string/
+    // number (body only) or a table {body=, headers=}; TORUSTIQ_PAYLOAD_VALUE: a table
+    // {value=, headers=}). Uses raw accesses only, so it never runs Lua code.
+    static bool ReadMessage(
+        lua_State* state, int index, uint32_t payload_kind, LuaMessage& out, std::string& error);
 
     // Reads a function result: nil/false -> no messages; a table with array part -> one message
     // per element; anything else -> a single message.
-    static bool
-    ReadMessages(lua_State* state, int index, std::vector<LuaMessage>& out, std::string& error);
+    static bool ReadMessages(lua_State* state,
+                             int index,
+                             uint32_t payload_kind,
+                             std::vector<LuaMessage>& out,
+                             std::string& error);
 
   private:
+    void PushValue(const torustiq_value& value, int depth);
     static void Hook(lua_State* state, lua_Debug* debug);
     const char* OnHook(); // returns an error message, or nullptr to continue
 

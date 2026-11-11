@@ -115,5 +115,32 @@ TEST_F(LuaInputTest, InputErrorsAreReported) {
     EXPECT_EQ(Create(vt, {{"script", "function process() end"}}), nullptr); // needs run()
 }
 
+TEST_F(LuaInputTest, StructuredInputEmitsValues) {
+    const auto* vt = registry_.FindInput("lua");
+    void* handle = Create(vt, {{"payload", "value"}, {"script", R"(
+        function run(emit)
+          emit({ value = { id = 1, list = { "a", "b" } }, headers = { k = "v" } })
+        end)"}});
+    ASSERT_NE(handle, nullptr);
+    EXPECT_EQ(emitted_.kind, TORUSTIQ_PAYLOAD_VALUE);
+    Collector out;
+    EXPECT_EQ(vt->run(handle, Collect, &out), TORUSTIQ_OK);
+    vt->destroy(handle);
+    ASSERT_EQ(out.messages.size(), 1u);
+    EXPECT_EQ(out.messages[0].payload,
+              Value(Value::Map{{"id", Value(int64_t{1})},
+                               {"list", Value(Value::Array{Value("a"), Value("b")})}}));
+    EXPECT_EQ(out.messages[0].headers.at("k"), "v");
+}
+
+TEST_F(LuaInputTest, DefaultInputKindIsBytes) {
+    const auto* vt = registry_.FindInput("lua");
+    void* handle = Create(vt, {{"script", "function run(emit) end"}});
+    ASSERT_NE(handle, nullptr);
+    EXPECT_EQ(emitted_.kind, TORUSTIQ_PAYLOAD_BYTES);
+    vt->destroy(handle);
+    EXPECT_EQ(Create(vt, {{"payload", "x"}, {"script", "function run(emit) end"}}), nullptr);
+}
+
 } // namespace
 } // namespace torustiq

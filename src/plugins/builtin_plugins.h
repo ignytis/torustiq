@@ -5,7 +5,7 @@
 
 namespace torustiq {
 
-// Registers stdin, directory and stdout plugins. Throws std::runtime_error on failure.
+// Registers all built-in plugins. Throws std::runtime_error on failure.
 void RegisterBuiltinPlugins(PluginRegistry& registry);
 
 } // namespace torustiq
