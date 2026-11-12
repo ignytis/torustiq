@@ -382,6 +382,64 @@ TEST_F(LuaTransformTest, CyclicValueIsRejected) {
     vt->destroy(handle);
 }
 
+TEST_F(LuaTransformTest, TextPayloadUsesTheTextField) {
+    const auto* vt = registry_.FindTransform("lua");
+    void* handle =
+        Create(vt,
+               {{"script",
+                 "function process(m) return { text = m.text:upper(), headers = m.headers } end"}},
+               TORUSTIQ_PAYLOAD_TEXT);
+    ASSERT_NE(handle, nullptr);
+    EXPECT_EQ(emitted_.kind, TORUSTIQ_PAYLOAD_TEXT);
+    Message in = MakeTextMessage("caf\xC3\xA9 x");
+    in.headers["k"] = "v";
+    Collector out;
+    MessageView view(in);
+    ASSERT_EQ(vt->process(handle, &view.get(), Collect, &out), TORUSTIQ_OK);
+    vt->destroy(handle);
+    ASSERT_EQ(out.messages.size(), 1u);
+    EXPECT_EQ(PayloadKindOf(out.messages[0].payload), TORUSTIQ_PAYLOAD_TEXT);
+    EXPECT_EQ(TextBody(out.messages[0]), "CAF\xC3\xA9 X"); // upper() is ASCII-only
+    EXPECT_EQ(out.messages[0].headers, in.headers);
+}
+
+TEST_F(LuaTransformTest, TextResultMayBeAPlainStringAndMustBeText) {
+    const auto* vt = registry_.FindTransform("lua");
+    void* handle = Create(
+        vt, {{"script", "function process(m) return m.text .. '!' end"}}, TORUSTIQ_PAYLOAD_TEXT);
+    ASSERT_NE(handle, nullptr);
+    Collector out;
+    const Message hi = MakeTextMessage("hi");
+    MessageView view(hi);
+    ASSERT_EQ(vt->process(handle, &view.get(), Collect, &out), TORUSTIQ_OK);
+    vt->destroy(handle);
+    ASSERT_EQ(out.messages.size(), 1u);
+    EXPECT_EQ(TextBody(out.messages[0]), "hi!");
+
+    handle = Create(
+        vt, {{"script", "function process(m) return { text = {} } end"}}, TORUSTIQ_PAYLOAD_TEXT);
+    ASSERT_NE(handle, nullptr);
+    Collector bad;
+    MessageView view2(hi);
+    EXPECT_EQ(vt->process(handle, &view2.get(), Collect, &bad), TORUSTIQ_ERROR);
+    vt->destroy(handle);
+}
+
+TEST_F(LuaTransformTest, ScriptCanTurnBytesIntoText) {
+    const auto* vt = registry_.FindTransform("lua");
+    void* handle =
+        Create(vt, {{"payload", "text"}, {"script", "function process(m) return m.body end"}});
+    ASSERT_NE(handle, nullptr);
+    EXPECT_EQ(emitted_.kind, TORUSTIQ_PAYLOAD_TEXT);
+    Collector out;
+    const Message abc = MakeBytesMessage("abc");
+    MessageView view(abc);
+    ASSERT_EQ(vt->process(handle, &view.get(), Collect, &out), TORUSTIQ_OK);
+    vt->destroy(handle);
+    EXPECT_EQ(PayloadKindOf(out.messages.at(0).payload), TORUSTIQ_PAYLOAD_TEXT);
+    EXPECT_EQ(TextBody(out.messages.at(0)), "abc");
+}
+
 TEST_F(LuaTransformTest, BadPayloadParameterFailsCreate) {
     const auto* vt = registry_.FindTransform("lua");
     EXPECT_EQ(Create(vt, {{"payload", "json"}, {"script", "function process() end"}}), nullptr);

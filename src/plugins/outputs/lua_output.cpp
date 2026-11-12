@@ -8,7 +8,8 @@
 namespace torustiq::plugins {
 namespace {
 
-// Accepts both payload kinds: the script sees `msg.body` (bytes) or `msg.value` (structured).
+// Accepts all payload kinds: the script sees `msg.body` (bytes), `msg.text` (text) or
+// `msg.value` (structured).
 int32_t Create(const torustiq_config* config, const torustiq_payload_spec*, void** out_handle) {
     return CreateLuaPlugin(config, "lua output", "write", out_handle);
 }

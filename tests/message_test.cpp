@@ -80,8 +80,19 @@ TEST(MessageTest, SdkHelpersReadAViewOfAStructuredPayload) {
     EXPECT_EQ(tag->as.d, 1.5);
 }
 
+TEST(MessageTest, TextPayloadIsATopLevelString) {
+    const Message message = MakeTextMessage("h\xC3\xA9");
+    MessageView view(message);
+    EXPECT_EQ(PayloadKindOf(view.get().payload), TORUSTIQ_PAYLOAD_TEXT);
+    EXPECT_EQ(PayloadKindOf(message.payload), TORUSTIQ_PAYLOAD_TEXT);
+    EXPECT_EQ(TextBody(MessageFromC(view.get())), "h\xC3\xA9");
+    EXPECT_EQ(TextBody(MakeBytesMessage("x")), "");
+    // a string nested in a structure is not a text payload
+    EXPECT_EQ(PayloadKindOf(Value(Value::Array{Value("s")})), TORUSTIQ_PAYLOAD_VALUE);
+}
+
 TEST(MessageTest, ScalarPayloadsAreStructured) {
-    for (const Value& value : {Value(), Value(true), Value(int64_t{-5}), Value(2.5), Value("s")}) {
+    for (const Value& value : {Value(), Value(true), Value(int64_t{-5}), Value(2.5)}) {
         Message message;
         message.payload = value;
         MessageView view(message);

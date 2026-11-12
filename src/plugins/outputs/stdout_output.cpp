@@ -52,7 +52,7 @@ struct StdoutOutput {
 
 int32_t
 Create(const torustiq_config* config, const torustiq_payload_spec* input, void** out_handle) {
-    if (input->kind != TORUSTIQ_PAYLOAD_BYTES) {
+    if (input->kind != TORUSTIQ_PAYLOAD_BYTES && input->kind != TORUSTIQ_PAYLOAD_TEXT) {
         return TORUSTIQ_UNSUPPORTED_PAYLOAD;
     }
     try {

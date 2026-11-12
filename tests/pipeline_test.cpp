@@ -151,6 +151,33 @@ int32_t ValueOutWrite(void*, const torustiq_message* m) {
     return TORUSTIQ_OK;
 }
 
+// Transform turning bytes into a text payload (the same characters).
+int32_t ToTextCreate(const torustiq_config*,
+                     const torustiq_payload_spec* in,
+                     torustiq_payload_spec* spec,
+                     void** out) {
+    if (in->kind != TORUSTIQ_PAYLOAD_BYTES) {
+        return TORUSTIQ_UNSUPPORTED_PAYLOAD;
+    }
+    spec->kind = TORUSTIQ_PAYLOAD_TEXT;
+    *out = nullptr;
+    return TORUSTIQ_OK;
+}
+int32_t ToTextProcess(void*, const torustiq_message* m, torustiq_emit_fn emit, void* ud) {
+    torustiq_message out{};
+    out.payload = torustiq_value_from_text(reinterpret_cast<const char*>(m->payload.as.bytes.data),
+                                           m->payload.as.bytes.len);
+    return emit(ud, &out);
+}
+// Text-only output: records the string.
+int32_t TextOutCreate(const torustiq_config*, const torustiq_payload_spec* in, void** out) {
+    if (in->kind != TORUSTIQ_PAYLOAD_TEXT) {
+        return TORUSTIQ_UNSUPPORTED_PAYLOAD;
+    }
+    *out = nullptr;
+    return TORUSTIQ_OK;
+}
+
 class PipelineTest : public ::testing::Test {
   protected:
     void SetUp() override {
@@ -185,6 +212,10 @@ class PipelineTest : public ::testing::Test {
         tr.name = "liar";
         tr.process = LiarProcess;
         ASSERT_EQ(registry_.RegisterTransform(tr), TORUSTIQ_OK);
+        tr.name = "to_text";
+        tr.create = ToTextCreate;
+        tr.process = ToTextProcess;
+        ASSERT_EQ(registry_.RegisterTransform(tr), TORUSTIQ_OK);
 
         torustiq_output_vtable out{};
         out.abi_version = TORUSTIQ_SDK_ABI_VERSION;
@@ -197,6 +228,10 @@ class PipelineTest : public ::testing::Test {
         out.name = "collect_value";
         out.create = ValueOutCreate;
         out.write = ValueOutWrite;
+        ASSERT_EQ(registry_.RegisterOutput(out), TORUSTIQ_OK);
+        out.name = "collect_text";
+        out.create = TextOutCreate;
+        out.write = OutWrite; // the string shares the bytes layout
         ASSERT_EQ(registry_.RegisterOutput(out), TORUSTIQ_OK);
     }
 
@@ -321,6 +356,38 @@ transforms: {a: {type: to_value}, b: {type: double}}
 outputs: {o: {type: collect}}
 )");
     EXPECT_THROW(Pipeline(config2, registry_), std::runtime_error);
+}
+
+TEST_F(PipelineTest, TextPayloadsFlowBetweenTextSteps) {
+    auto config = ParsePipelineConfig(R"(
+inputs: {i: {type: fake_in, config: {count: 2}}}
+transforms: {t: {type: to_text}}
+outputs: {o: {type: collect_text}}
+)");
+    Pipeline pipeline(config, registry_);
+    EXPECT_EQ(pipeline.Run(), 0);
+    EXPECT_EQ(g_bodies, (std::vector<std::string>{"0", "1"}));
+}
+
+TEST_F(PipelineTest, TextIsRejectedByBytesAndStructuredSteps) {
+    for (const char* output : {"collect", "collect_value"}) {
+        auto config = ParsePipelineConfig(std::string(R"(
+inputs: {i: {type: fake_in}}
+transforms: {t: {type: to_text}}
+outputs: {o: {type: )") + output + "}}\n");
+        try {
+            Pipeline pipeline(config, registry_);
+            FAIL() << "expected a negotiation error for " << output;
+        } catch (const std::runtime_error& e) {
+            EXPECT_NE(std::string(e.what()).find("text"), std::string::npos) << e.what();
+        }
+    }
+    // bytes -> text-only output
+    auto config = ParsePipelineConfig(R"(
+inputs: {i: {type: fake_in}}
+outputs: {o: {type: collect_text}}
+)");
+    EXPECT_THROW(Pipeline(config, registry_), std::runtime_error);
 }
 
 TEST_F(PipelineTest, InputsFeedingOneStepMustAgreeOnKind) {

@@ -68,6 +68,26 @@ TEST(StdoutPluginTest, WritesFormattedLines) {
     EXPECT_EQ(captured.str(), "<hi>\n");
 }
 
+TEST(StdoutPluginTest, PrintsTextPayload) {
+    PluginRegistry registry;
+    const torustiq_registrar registrar = registry.registrar();
+    ASSERT_EQ(torustiq_register_stdout_output(&registrar), TORUSTIQ_OK);
+    const auto* vt = registry.FindOutput("stdout");
+    ASSERT_NE(vt, nullptr);
+    void* handle = nullptr;
+    const torustiq_payload_spec input{TORUSTIQ_PAYLOAD_TEXT};
+    ASSERT_EQ(vt->create(nullptr, &input, &handle), TORUSTIQ_OK);
+
+    std::ostringstream captured;
+    std::streambuf* old = std::cout.rdbuf(captured.rdbuf());
+    const Message m = MakeTextMessage("caf\xC3\xA9");
+    MessageView view(m);
+    EXPECT_EQ(vt->write(handle, &view.get()), TORUSTIQ_OK);
+    std::cout.rdbuf(old);
+    vt->destroy(handle);
+    EXPECT_EQ(captured.str(), "caf\xC3\xA9\n");
+}
+
 TEST(StdoutPluginTest, RejectsStructuredPayload) {
     PluginRegistry registry;
     const torustiq_registrar registrar = registry.registrar();

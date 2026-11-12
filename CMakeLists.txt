@@ -112,6 +112,7 @@ set(TORUSTIQ_PLUGIN_SOURCES
     src/plugins/inputs/directory_input.cpp
     src/plugins/inputs/stdin_input.cpp
     src/plugins/transforms/json_transforms.cpp
+    src/plugins/transforms/text_transforms.cpp
     src/plugins/outputs/stdout_output.cpp)
 add_library(torustiq_plugins STATIC ${TORUSTIQ_PLUGIN_SOURCES})
 target_include_directories(torustiq_plugins PUBLIC src)

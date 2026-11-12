@@ -1,0 +1,37 @@
+# Text payloads: bytes are validated as UTF-8 once (decode_text), a Lua transform works with the
+# string (msg.text), and encode_text turns it back into bytes.
+# Run: build/torustiq examples/text_pipeline.yaml
+name: Text pipeline
+
+inputs:
+  generator:
+    type: lua
+    config:
+      count: 3
+      script: |
+        function run(emit)
+          for i = 1, tonumber(config.count) do
+            emit({ body = "line " .. i .. " \xC3\xA9" })
+          end
+        end
+
+transforms:
+  to_text:
+    type: decode_text
+    inputs: [generator]
+  shout:
+    type: lua
+    inputs: [to_text]
+    config:
+      script: |
+        function process(msg)
+          return { text = msg.text:upper() .. "!", headers = msg.headers }
+        end
+  to_bytes:
+    type: encode_text
+    inputs: [shout]
+
+outputs:
+  console:
+    type: stdout
+    inputs: [to_bytes]

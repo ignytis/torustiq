@@ -37,8 +37,11 @@ int32_t ParseLuaPayloadKind(const torustiq_config* config,
         *out_kind = TORUSTIQ_PAYLOAD_BYTES;
     } else if (std::string_view(value) == "value") {
         *out_kind = TORUSTIQ_PAYLOAD_VALUE;
+    } else if (std::string_view(value) == "text") {
+        *out_kind = TORUSTIQ_PAYLOAD_TEXT;
     } else {
-        std::cerr << kind << ": 'payload' must be 'bytes' or 'value', got '" << value << "'\n";
+        std::cerr << kind << ": 'payload' must be 'bytes', 'text' or 'value', got '" << value
+                  << "'\n";
         return TORUSTIQ_ERROR;
     }
     return TORUSTIQ_OK;

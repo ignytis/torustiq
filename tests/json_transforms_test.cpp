@@ -99,6 +99,13 @@ TEST_F(JsonTransformsTest, BytesMemberCannotBeEncoded) {
     EXPECT_EQ(Run(encode_, TORUSTIQ_PAYLOAD_VALUE, in, out), TORUSTIQ_ERROR);
 }
 
+TEST_F(JsonTransformsTest, DecodesTextInput) {
+    std::vector<Message> out;
+    ASSERT_EQ(Run(decode_, TORUSTIQ_PAYLOAD_TEXT, MakeTextMessage(R"({"a":1})"), out), TORUSTIQ_OK);
+    ASSERT_EQ(out.size(), 1u);
+    EXPECT_EQ(out[0].payload, Value(Value::Map{{"a", Value(int64_t{1})}}));
+}
+
 TEST_F(JsonTransformsTest, RejectsWrongInputKind) {
     const torustiq_config config{nullptr, 0};
     torustiq_payload_spec output{};

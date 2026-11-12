@@ -13,7 +13,14 @@ namespace {
 constexpr size_t kQueueCapacity = 256;
 
 const char* PayloadKindName(uint32_t kind) {
-    return kind == TORUSTIQ_PAYLOAD_BYTES ? "bytes" : "structured";
+    switch (kind) {
+    case TORUSTIQ_PAYLOAD_BYTES:
+        return "bytes";
+    case TORUSTIQ_PAYLOAD_TEXT:
+        return "text";
+    default:
+        return "structured";
+    }
 }
 } // namespace
 
@@ -160,14 +167,15 @@ Pipeline::Pipeline(const PipelineConfig& config, const PluginRegistry& registry)
                 throw std::runtime_error("'" + component.id + "' (" + component.type +
                                          ") does not accept " + PayloadKindName(input_spec.kind) +
                                          " payloads from '" + upstreams.front()->id +
-                                         "'; add a conversion step (e.g. decode_json or "
-                                         "encode_json) between them");
+                                         "'; add a conversion step (e.g. decode_text, "
+                                         "encode_text, decode_json or encode_json) between them");
             }
             throw std::runtime_error("failed to initialise '" + component.id + "' (" +
                                      component.type + ")");
         }
         if (kind != NodeKind::kOutput && node->output_spec.kind != TORUSTIQ_PAYLOAD_BYTES &&
-            node->output_spec.kind != TORUSTIQ_PAYLOAD_VALUE) {
+            node->output_spec.kind != TORUSTIQ_PAYLOAD_VALUE &&
+            node->output_spec.kind != TORUSTIQ_PAYLOAD_TEXT) {
             throw std::runtime_error("'" + component.id + "' declared an unknown payload kind");
         }
         PipelineNode* raw = node.get();

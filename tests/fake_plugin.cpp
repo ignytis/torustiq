@@ -1,4 +1,4 @@
-// Test-only plugin library. Compile definitions: FAKE_PLUGIN_ID, FAKE_PLUGIN_ABI.
+// Test-only plugin library. Compile definitions: FAKE_PLUGIN_ID, FAKE_PLUGIN_ABI (0 = current).
 // Appends "init <id>" / "shutdown <id>" to the file named by $FAKE_PLUGIN_LOG.
 
 #include <cstdint>
@@ -9,7 +9,8 @@
 
 namespace {
 
-const torustiq_plugin_info kInfo = {FAKE_PLUGIN_ABI, FAKE_PLUGIN_ID};
+const torustiq_plugin_info kInfo = {
+    FAKE_PLUGIN_ABI == 0 ? TORUSTIQ_SDK_ABI_VERSION : FAKE_PLUGIN_ABI, FAKE_PLUGIN_ID};
 
 void Log(const char* what) {
     const char* path = std::getenv("FAKE_PLUGIN_LOG");

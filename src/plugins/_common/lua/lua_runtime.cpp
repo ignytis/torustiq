@@ -370,11 +370,12 @@ void LuaRuntime::PushValue(const torustiq_value& value, int depth) {
 
 void LuaRuntime::PushMessage(const torustiq_message& message) {
     lua_createtable(state_, 0, 2);
-    if (message.payload.kind == TORUSTIQ_VALUE_BYTES) {
+    if (message.payload.kind == TORUSTIQ_VALUE_BYTES ||
+        message.payload.kind == TORUSTIQ_VALUE_STRING) {
         lua_pushlstring(state_,
                         reinterpret_cast<const char*>(message.payload.as.bytes.data),
                         message.payload.as.bytes.len);
-        lua_setfield(state_, -2, "body");
+        lua_setfield(state_, -2, message.payload.kind == TORUSTIQ_VALUE_STRING ? "text" : "body");
     } else {
         PushValue(message.payload, 0);
         lua_setfield(state_, -2, "value");
@@ -394,6 +395,10 @@ bool LuaRuntime::ReadMessage(
     const int type = lua_type(state, index);
     size_t length = 0;
     const bool structured = payload_kind == TORUSTIQ_PAYLOAD_VALUE;
+    const bool is_text = payload_kind == TORUSTIQ_PAYLOAD_TEXT;
+    if (is_text) {
+        out.payload.kind = TORUSTIQ_VALUE_STRING;
+    }
     if (!structured && (type == LUA_TSTRING || type == LUA_TNUMBER)) {
         const char* text = lua_tolstring(state, index, &length);
         out.payload.text.assign(text, length);
@@ -416,15 +421,15 @@ bool LuaRuntime::ReadMessage(
             return false;
         }
     } else {
-        lua_pushliteral(state, "body");
+        lua_pushstring(state, is_text ? "text" : "body");
         lua_rawget(state, index);
         const int body_type = lua_type(state, -1);
         if (body_type == LUA_TSTRING || body_type == LUA_TNUMBER) {
             const char* text = lua_tolstring(state, -1, &length);
             out.payload.text.assign(text, length);
         } else if (body_type != LUA_TNIL) {
-            error = std::string("message 'body' must be a string, got ") +
-                    lua_typename(state, body_type);
+            error = std::string(is_text ? "message 'text'" : "message 'body'") +
+                    " must be a string, got " + lua_typename(state, body_type);
             lua_pop(state, 1);
             return false;
         }

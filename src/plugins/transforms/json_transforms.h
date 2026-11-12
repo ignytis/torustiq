@@ -5,7 +5,7 @@
 
 extern "C" {
 // Registers two transforms that convert between the payload kinds:
-//   `decode_json`  bytes -> structured: parses the bytes as one JSON document.
+//   `decode_json`  bytes or text -> structured: parses the data as one JSON document.
 //   `encode_json`  structured -> bytes: serialises the value as compact JSON.
 // JSON null/bool/integer/float/string/array/object map to the matching value kinds (object member
 // order is kept). Integers above the int64 range become floats. A BYTES member cannot be encoded.

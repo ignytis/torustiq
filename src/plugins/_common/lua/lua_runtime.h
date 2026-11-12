@@ -108,13 +108,14 @@ class LuaRuntime {
     // On failure pops the error into `error` and returns false.
     bool Call(int nargs, int nresults, std::string& error);
 
-    // Pushes {body = <string>, headers = {...}} for a bytes payload, or {value = <table/scalar>,
-    // headers = {...}} for a structured one.
+    // Pushes {body = <string>, headers = {...}} for a bytes payload, {text = <string>, headers =
+    // {...}} for a text one, or {value = <table/scalar>, headers = {...}} for a structured one.
     void PushMessage(const torustiq_message& message);
 
     // Reads a message whose payload has kind `payload_kind` (TORUSTIQ_PAYLOAD_BYTES: a string/
-    // number (body only) or a table {body=, headers=}; TORUSTIQ_PAYLOAD_VALUE: a table
-    // {value=, headers=}). Uses raw accesses only, so it never runs Lua code.
+    // number (body only) or a table {body=, headers=}; TORUSTIQ_PAYLOAD_TEXT: the same with
+    // `text=`; TORUSTIQ_PAYLOAD_VALUE: a table {value=, headers=}). Uses raw accesses only, so it
+    // never runs Lua code.
     static bool ReadMessage(
         lua_State* state, int index, uint32_t payload_kind, LuaMessage& out, std::string& error);
 

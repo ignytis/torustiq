@@ -88,17 +88,32 @@ Message MakeBytesMessage(const std::string& body) {
     return message;
 }
 
+Message MakeTextMessage(const std::string& text) {
+    Message message;
+    message.payload = Value(text);
+    return message;
+}
+
+std::string TextBody(const Message& message) {
+    const auto* text = std::get_if<std::string>(&message.payload.data);
+    return text == nullptr ? std::string() : *text;
+}
+
 std::string BodyText(const Message& message) {
     const auto* bytes = std::get_if<Bytes>(&message.payload.data);
     return bytes == nullptr ? std::string() : std::string(bytes->begin(), bytes->end());
 }
 
 uint32_t PayloadKindOf(const Value& value) {
-    return value.IsBytes() ? TORUSTIQ_PAYLOAD_BYTES : TORUSTIQ_PAYLOAD_VALUE;
+    return value.IsBytes()    ? TORUSTIQ_PAYLOAD_BYTES
+           : value.IsString() ? TORUSTIQ_PAYLOAD_TEXT
+                              : TORUSTIQ_PAYLOAD_VALUE;
 }
 
 uint32_t PayloadKindOf(const torustiq_value& value) {
-    return value.kind == TORUSTIQ_VALUE_BYTES ? TORUSTIQ_PAYLOAD_BYTES : TORUSTIQ_PAYLOAD_VALUE;
+    return value.kind == TORUSTIQ_VALUE_BYTES    ? TORUSTIQ_PAYLOAD_BYTES
+           : value.kind == TORUSTIQ_VALUE_STRING ? TORUSTIQ_PAYLOAD_TEXT
+                                                 : TORUSTIQ_PAYLOAD_VALUE;
 }
 
 Value ValueFromC(const torustiq_value& value) {

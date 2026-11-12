@@ -37,6 +37,9 @@ struct Value {
     bool IsBytes() const {
         return std::holds_alternative<Bytes>(data);
     }
+    bool IsString() const {
+        return std::holds_alternative<std::string>(data);
+    }
     // Returns the map member `key`, or nullptr if this is not a map or has no such key.
     const Value* Find(const std::string& key) const;
     Value* Find(const std::string& key);
@@ -53,7 +56,8 @@ struct MapEntry {
     bool operator==(const MapEntry&) const = default;
 };
 
-// Host-side message: a payload (bytes for simple data, anything else for structured data)
+// Host-side message: a payload (bytes for simple data, a string for text, anything else for
+// structured data)
 // and string headers. A default message has an empty bytes payload.
 struct Message {
     Value payload{Bytes{}};
@@ -68,7 +72,14 @@ Message MakeBytesMessage(const std::string& body);
 // The payload of a bytes message as a string; empty if the payload is not bytes.
 std::string BodyText(const Message& message);
 
-// The payload kind of a value as agreed between steps: TORUSTIQ_PAYLOAD_BYTES or _VALUE.
+// Builds a message with a text (string) payload.
+Message MakeTextMessage(const std::string& text);
+
+// The payload of a text message; empty if the payload is not a string.
+std::string TextBody(const Message& message);
+
+// The payload kind of a value as agreed between steps: TORUSTIQ_PAYLOAD_BYTES, _TEXT (a string)
+// or _VALUE (anything else).
 uint32_t PayloadKindOf(const Value& value);
 uint32_t PayloadKindOf(const torustiq_value& value);
 

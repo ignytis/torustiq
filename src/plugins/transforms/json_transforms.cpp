@@ -136,7 +136,7 @@ int32_t DecodeCreate(const torustiq_config*,
                      const torustiq_payload_spec* input,
                      torustiq_payload_spec* out_output,
                      void** out_handle) {
-    if (input->kind != TORUSTIQ_PAYLOAD_BYTES) {
+    if (input->kind != TORUSTIQ_PAYLOAD_BYTES && input->kind != TORUSTIQ_PAYLOAD_TEXT) {
         return TORUSTIQ_UNSUPPORTED_PAYLOAD;
     }
     out_output->kind = TORUSTIQ_PAYLOAD_VALUE;

@@ -43,8 +43,8 @@ outputs:
 - `config:` holds plugin parameters (nested YAML is flattened to keys like `auth.user`).
 
 ## Payloads
-A message carries either simple data (**bytes**: the whole content is one piece of data) or structured data
-(**structured**: a tree of null/bool/int/double/string/array/map that components access by key).
+A message carries simple data (**bytes**: the whole content is one piece of data), **text** (a UTF-8 string)
+or structured data (**structured**: a tree of null/bool/int/double/array/map that components access by key).
 The kind is agreed once, when the pipeline is built: each step is told the kind of the step before it and
 declares the kind it emits. A step that cannot handle what it receives makes the pipeline fail at startup,
 naming the step (no silent conversion, no per-message checks). Convert with ordinary steps:
@@ -57,22 +57,34 @@ transforms:
 ```
 Several transforms can edit the same document without re-parsing it. See `examples/json_pipeline.yaml`.
 
+Text steps work on a string; `decode_text` / `encode_text` convert from and to bytes:
+
+```yaml
+transforms:
+  to_text:   {type: decode_text, config: {invalid: replace}}   # bytes -> text (invalid UTF-8: error|replace)
+  shout:     {type: lua, config: {script: "function process(m) return m.text:upper() end"}}
+  to_bytes:  {type: encode_text}                               # text -> bytes
+```
+See `examples/text_pipeline.yaml`.
+
 ## Built-in plugins
 | Type | Kind | Description / config |
 |------|------|----------------------|
 | `stdin` | input | Each line is a record. |
 | `directory` | input | Each file in `path` (sorted) is a record; headers `filename`, `path`. |
 | `lua` | input, transform, output | Scripts in Lua, see below. |
-| `decode_json` | transform | Bytes -> structured: parses the body as a JSON document. |
+| `decode_text` | transform | Bytes -> text: the body must be valid UTF-8; `invalid: error` (default) or `replace` (U+FFFD). |
+| `encode_text` | transform | Text -> bytes. |
+| `decode_json` | transform | Bytes or text -> structured: parses the data as a JSON document. |
 | `encode_json` | transform | Structured -> bytes: serialises the value as compact JSON. |
-| `stdout` | output | Prints `format` (default `%BODY%`) per record; supports `%BODY%` and `%HEADERS[name]%`. Bytes only. |
+| `stdout` | output | Prints `format` (default `%BODY%`) per record; supports `%BODY%` and `%HEADERS[name]%`. Bytes or text. |
 
 ### Lua plugins
 `type: lua` works as an input, a transform and an output. Parameters: `script` (inline code) or `file`
 (path), and optional `max_instructions` (default `10000000`, `0` = unlimited), which caps the work done per
 call so a runaway script fails with an error instead of hanging the stage. For inputs it applies between
 two `emit()` calls. The `config:` section is visible to the script as the global table `config`.
-`payload: bytes|value` sets the kind a script input emits (default `bytes`) or a transform emits (default:
+`payload: bytes|text|value` sets the kind a script input emits (default `bytes`) or a transform emits (default:
 the kind it receives). Outputs and transforms get whatever kind is wired to them.
 
 ```lua
@@ -80,6 +92,7 @@ the kind it receives). Outputs and transforms get whatever kind is wired to them
 -- transform: function process(msg) -- return nil (drop), a message, or a list of messages
 -- output:    function write(msg)   -- optional: function flush() at the end
 -- message:   { body = "bytes", headers = { key = "value" } }   (a plain string means body only)
+-- text message:       { text = "string", headers = { ... } }   (a plain string means text only)
 -- structured message: { value = <table or scalar>, headers = { ... } }   (no body)
 ```
 In a structured value a table that is a sequence `{1, 2, 3}` is an array, a table with string keys is a map

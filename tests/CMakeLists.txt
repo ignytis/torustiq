@@ -31,8 +31,8 @@ if(UNIX)
     torustiq_add_test(plugin_loader_test
                       SOURCES ${SRC}/core/plugin_loader.cpp ${SRC}/core/plugin_registry.cpp
                       LIBS ${CMAKE_DL_LIBS})
-    # Fake plugin libraries loaded by plugin_loader_test.
-    foreach(spec "fake_a:1" "fake_b:1" "fake_bad:999")
+    # Fake plugin libraries loaded by plugin_loader_test (ABI 0 = the current SDK ABI).
+    foreach(spec "fake_a:0" "fake_b:0" "fake_bad:999")
         string(REPLACE ":" ";" parts ${spec})
         list(GET parts 0 fake_id)
         list(GET parts 1 fake_abi)
@@ -58,6 +58,9 @@ torustiq_add_test(json_transforms_test
                   SOURCES ${SRC}/plugins/transforms/json_transforms.cpp ${SRC}/core/message.cpp
                           ${SRC}/core/plugin_registry.cpp
                   LIBS nlohmann_json::nlohmann_json)
+torustiq_add_test(text_transforms_test
+                  SOURCES ${SRC}/plugins/transforms/text_transforms.cpp ${SRC}/core/message.cpp
+                          ${SRC}/core/plugin_registry.cpp)
 torustiq_add_test(stdout_output_test SOURCES ${SRC}/plugins/outputs/stdout_output.cpp
                   ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp)
 torustiq_add_test(stdin_input_test SOURCES ${SRC}/plugins/inputs/stdin_input.cpp
