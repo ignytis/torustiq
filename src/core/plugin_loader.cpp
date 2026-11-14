@@ -178,6 +178,11 @@ void LoadReferencedPlugins(const PipelineConfig& config,
             [&](const std::string& t) { return registry.FindTransform(t) != nullptr; });
     collect(config.outputs,
             [&](const std::string& t) { return registry.FindOutput(t) != nullptr; });
+    for (const SecretConfig& secret : config.secrets) {
+        if (registry.FindSecret(secret.kind) == nullptr && loader.HasPlugin(secret.kind)) {
+            ids.insert(secret.kind);
+        }
+    }
     for (const std::string& id : ids) {
         loader.Load(id, registry);
     }

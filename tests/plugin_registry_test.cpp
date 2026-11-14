@@ -33,6 +33,29 @@ TEST(PluginRegistryTest, RegisterAndFind) {
     EXPECT_EQ(registry.FindOutput("fake"), nullptr);
 }
 
+TEST(PluginRegistryTest, RegistersSecretProviders) {
+    torustiq_secret_vtable v{};
+    v.abi_version = TORUSTIQ_SDK_ABI_VERSION;
+    v.name = "vault";
+    v.create = [](const torustiq_config*, void**) { return TORUSTIQ_OK; };
+    v.resolve = [](void*, torustiq_secret_sink_fn, void*) { return TORUSTIQ_OK; };
+    v.destroy = Destroy;
+
+    PluginRegistry registry;
+    const torustiq_registrar registrar = registry.registrar();
+    ASSERT_NE(registrar.register_secret, nullptr);
+    EXPECT_EQ(registrar.register_secret(registrar.context, &v), TORUSTIQ_OK);
+    EXPECT_NE(registry.FindSecret("vault"), nullptr);
+    EXPECT_EQ(registry.FindSecret("other"), nullptr);
+    EXPECT_EQ(registry.FindInput("vault"), nullptr);
+    EXPECT_EQ(registry.RegisterSecret(v), TORUSTIQ_ERROR); // duplicate
+
+    torustiq_secret_vtable no_resolve = v;
+    no_resolve.name = "broken";
+    no_resolve.resolve = nullptr;
+    EXPECT_EQ(registry.RegisterSecret(no_resolve), TORUSTIQ_ERROR);
+}
+
 TEST(PluginRegistryTest, RejectsDuplicate) {
     PluginRegistry registry;
     EXPECT_EQ(registry.RegisterInput(ValidInput()), TORUSTIQ_OK);

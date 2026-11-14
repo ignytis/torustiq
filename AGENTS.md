@@ -13,7 +13,7 @@ pipeline definition and runs it: one or more inputs, zero or more transforms, on
 - `src/plugins/` — built-in plugins, grouped by kind. They must use **only** the SDK C API
   (`torustiq/sdk.h`), exactly like external plugins will:
   - `inputs/` (`stdin`, `directory`, `lua_input`), `transforms/` (`lua_transform`, `json_transforms`),
-    `outputs/` (`stdout`, `lua_output`);
+    `outputs/` (`stdout`, `lua_output`), `secrets/` (`file`, `env` providers);
   - `_common/` — code shared between plugins, not a plugin kind (`_common/lua/`: sandboxed `LuaRuntime`, `LuaPlugin` base);
   - `builtin_plugins.cpp` registers everything; each plugin exports a `torustiq_register_*` function.
   New plugin → put it in the directory of its kind and list it in `builtin_plugins.cpp` and `CMakeLists.txt`.
@@ -29,6 +29,11 @@ pipeline definition and runs it: one or more inputs, zero or more transforms, on
   kinds are negotiated in `Pipeline`'s constructor: `create` gets the upstream `torustiq_payload_spec` and
   declares its own; `TORUSTIQ_UNSUPPORTED_PAYLOAD` becomes a startup error. Plugins must not check the kind
   per message. Kind conversion is done by ordinary transform steps (`decode_json`, `encode_json`).
+- Secrets: the top-level `secrets:` section declares providers (`kind` + `config`, a plugin kind like
+  inputs; dynamic plugins register them via `register_secret`). A config value that is a map with
+  `_kind: ref_secret` + `id` is kept symbolic by `pipeline_config` (`ComponentConfig::secret_refs`) and
+  substituted by `core/secrets` (`ResolveSecrets`) after plugins are loaded and before `Pipeline` is built, so
+  plugins only ever see plain values. Scalars are static (`_kind: string`). Never log secret values.
 - `tests/` — one `<unit>_test.cpp` per unit (GoogleTest); each test target compiles only the sources it needs.
 - `examples/` — sample pipelines.
 - The plugin SDK is a **separate project** (`torustiq-sdk`), fetched via `FetchContent`. API changes go there
@@ -56,5 +61,6 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 clang-format --dry-run --Werror $(git ls-files '*.cpp' '*.h')
 ```
-If the SDK repo is not pushed or you are changing it, use a local checkout:
-`-DFETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK=$PWD/../torustiq-sdk`.
+The SDK is looked up in this order: `-DFETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK=<dir>`, env `TORUSTIQ_SDK_SOURCE_DIR`,
+`../torustiq-sdk` (Debug builds only), an installed package, `FetchContent` from git. So a sibling checkout is used
+automatically in Debug; configure prints which source was chosen.

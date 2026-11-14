@@ -20,10 +20,12 @@ class PluginRegistry {
     int32_t RegisterInput(const torustiq_input_vtable& vtable);
     int32_t RegisterTransform(const torustiq_transform_vtable& vtable);
     int32_t RegisterOutput(const torustiq_output_vtable& vtable);
+    int32_t RegisterSecret(const torustiq_secret_vtable& vtable);
 
     const torustiq_input_vtable* FindInput(const std::string& name) const;
     const torustiq_transform_vtable* FindTransform(const std::string& name) const;
     const torustiq_output_vtable* FindOutput(const std::string& name) const;
+    const torustiq_secret_vtable* FindSecret(const std::string& name) const;
 
     // Registrar to pass to plugin registration functions. Valid while this registry lives.
     torustiq_registrar registrar();
@@ -32,6 +34,7 @@ class PluginRegistry {
     std::map<std::string, torustiq_input_vtable> inputs_;
     std::map<std::string, torustiq_transform_vtable> transforms_;
     std::map<std::string, torustiq_output_vtable> outputs_;
+    std::map<std::string, torustiq_secret_vtable> secrets_;
 };
 
 } // namespace torustiq

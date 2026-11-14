@@ -11,8 +11,9 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 Dependencies (yaml-cpp, CLI11, nlohmann_json, GoogleTest) are used from the system if installed, otherwise fetched.
-The plugin SDK ([torustiq-sdk](https://github.com/ignytis/torustiq-sdk)) is fetched with `FetchContent`;
-to build against a local checkout add `-DFETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK=$PWD/../torustiq-sdk`.
+The SDK ([torustiq-sdk](https://github.com/ignytis/torustiq-sdk)) is looked up in this order: a local checkout given
+with `-DFETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK=<dir>`, the `TORUSTIQ_SDK_SOURCE_DIR` environment variable, `../torustiq-sdk`
+(Debug builds only), an installed package, and finally `FetchContent` from git. The configure step prints which one is used.
 
 ## Usage
 ```sh
@@ -41,6 +42,27 @@ outputs:
 - `inputs:` wires a component to earlier components (an output may list several, fanning in; one component
   may feed several outputs). When omitted, a component reads from the previous one in the chain.
 - `config:` holds plugin parameters (nested YAML is flattened to keys like `auth.user`).
+
+## Secrets
+Keep passwords and tokens out of the definition: declare providers under `secrets` and reference them.
+```yaml
+secrets:
+  db_password:
+    kind: file          # built in: `file` (config: path), `env` (config: key)
+    config: {path: /run/secrets/db_password}
+
+inputs:
+  db:
+    type: mysql
+    config:
+      user: myuser      # same as {_kind: string, value: myuser}
+      password: {_kind: ref_secret, id: db_password}
+```
+- A parameter that is a map with `_kind: ref_secret` is replaced by the secret's value at startup, before any
+  step is created; plugins only see the plain value. Any other scalar is a static string.
+- Only referenced secrets are resolved, each once. A missing file/variable or an unknown id stops the start.
+- Providers can also come from dynamic plugins (the plugin ID is the `kind`).
+  See `examples/secrets.yaml`.
 
 ## Payloads
 A message carries simple data (**bytes**: the whole content is one piece of data), **text** (a UTF-8 string)
@@ -78,6 +100,9 @@ See `examples/text_pipeline.yaml`.
 | `decode_json` | transform | Bytes or text -> structured: parses the data as a JSON document. |
 | `encode_json` | transform | Structured -> bytes: serialises the value as compact JSON. |
 | `stdout` | output | Prints `format` (default `%BODY%`) per record; supports `%BODY%` and `%HEADERS[name]%`. Bytes or text. |
+
+Secret providers (in the `secrets` section, see above): `file` (`path`; the content without one trailing
+newline) and `env` (`key`; the variable must be set).
 
 ### Lua plugins
 `type: lua` works as an input, a transform and an output. Parameters: `script` (inline code) or `file`

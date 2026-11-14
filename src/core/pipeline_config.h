@@ -20,11 +20,25 @@ struct ComponentConfig {
     // (empty only for inputs).
     std::vector<std::string> inputs;
     // Plugin parameters. Nested YAML is flattened: maps to "a.b", sequences to "a.0".
+    // A scalar is a static value, equivalent to `{_kind: string, value: <scalar>}`.
+    std::map<std::string, std::string> config;
+    // Parameters given as `{_kind: ref_secret, id: <secret id>}`: flattened key -> secret id.
+    // They are absent from `config` until ResolveSecrets() substitutes the values.
+    std::map<std::string, std::string> secret_refs;
+};
+
+// A named secret provider from the top-level `secrets` section.
+struct SecretConfig {
+    std::string id;
+    // Provider kind (e.g. "file", "env"); built in or from a dynamic plugin.
+    std::string kind;
+    // Provider parameters, flattened like component parameters. Always static values.
     std::map<std::string, std::string> config;
 };
 
 struct PipelineConfig {
     std::string name;
+    std::vector<SecretConfig> secrets;
     std::vector<ComponentConfig> inputs;
     std::vector<ComponentConfig> transforms;
     std::vector<ComponentConfig> outputs;

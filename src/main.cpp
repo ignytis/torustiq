@@ -13,6 +13,7 @@
 #include "core/pipeline_config.h"
 #include "core/plugin_loader.h"
 #include "core/plugin_registry.h"
+#include "core/secrets.h"
 #include "plugins/builtin_plugins.h"
 
 namespace {
@@ -34,7 +35,7 @@ int main(int argc, char** argv) {
     CLI11_PARSE(app, argc, argv);
 
     try {
-        const torustiq::PipelineConfig config = torustiq::LoadPipelineConfig(pipeline_path);
+        torustiq::PipelineConfig config = torustiq::LoadPipelineConfig(pipeline_path);
         // The loader is declared first so that it is destroyed last: plugin vtables point into
         // the loaded libraries.
         torustiq::PluginLoader loader;
@@ -42,6 +43,7 @@ int main(int argc, char** argv) {
         torustiq::RegisterBuiltinPlugins(registry);
         loader.Scan(torustiq::ResolvePluginsDir(TORUSTIQ_DEFAULT_HOME, torustiq::ProcessEnv));
         torustiq::LoadReferencedPlugins(config, loader, registry);
+        torustiq::ResolveSecrets(config, registry);
         torustiq::Pipeline pipeline(config, registry);
 
         std::signal(SIGINT, HandleSignal);

@@ -50,6 +50,13 @@ int32_t PluginRegistry::RegisterOutput(const torustiq_output_vtable& vtable) {
     return Add(outputs_, vtable);
 }
 
+int32_t PluginRegistry::RegisterSecret(const torustiq_secret_vtable& vtable) {
+    if (vtable.resolve == nullptr) {
+        return TORUSTIQ_ERROR;
+    }
+    return Add(secrets_, vtable);
+}
+
 const torustiq_input_vtable* PluginRegistry::FindInput(const std::string& name) const {
     return Find(inputs_, name);
 }
@@ -60,6 +67,10 @@ const torustiq_transform_vtable* PluginRegistry::FindTransform(const std::string
 
 const torustiq_output_vtable* PluginRegistry::FindOutput(const std::string& name) const {
     return Find(outputs_, name);
+}
+
+const torustiq_secret_vtable* PluginRegistry::FindSecret(const std::string& name) const {
+    return Find(secrets_, name);
 }
 
 torustiq_registrar PluginRegistry::registrar() {
@@ -73,6 +84,9 @@ torustiq_registrar PluginRegistry::registrar() {
     };
     registrar.register_output = [](void* context, const torustiq_output_vtable* vtable) {
         return static_cast<PluginRegistry*>(context)->RegisterOutput(*vtable);
+    };
+    registrar.register_secret = [](void* context, const torustiq_secret_vtable* vtable) {
+        return static_cast<PluginRegistry*>(context)->RegisterSecret(*vtable);
     };
     return registrar;
 }

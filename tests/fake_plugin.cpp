@@ -1,4 +1,5 @@
-// Test-only plugin library. Compile definitions: FAKE_PLUGIN_ID, FAKE_PLUGIN_ABI (0 = current).
+// Test-only plugin library. Compile definitions: FAKE_PLUGIN_ID, FAKE_PLUGIN_ABI (0 = current),
+// FAKE_PLUGIN_SECRET (optional: register a secret provider returning "from-plugin", not an output).
 // Appends "init <id>" / "shutdown <id>" to the file named by $FAKE_PLUGIN_LOG.
 
 #include <cstdint>
@@ -23,6 +24,16 @@ void Log(const char* what) {
     }
 }
 
+#ifdef FAKE_PLUGIN_SECRET
+int32_t CreateSecret(const torustiq_config*, void** out_handle) {
+    *out_handle = new int(0);
+    return TORUSTIQ_OK;
+}
+int32_t Resolve(void*, torustiq_secret_sink_fn sink, void* user_data) {
+    const torustiq_bytes value{reinterpret_cast<const uint8_t*>("from-plugin"), 11};
+    return sink(user_data, &value);
+}
+#else
 int32_t Create(const torustiq_config*, const torustiq_payload_spec*, void** out_handle) {
     *out_handle = new int(0);
     return TORUSTIQ_OK;
@@ -30,6 +41,7 @@ int32_t Create(const torustiq_config*, const torustiq_payload_spec*, void** out_
 int32_t Write(void*, const torustiq_message*) {
     return TORUSTIQ_OK;
 }
+#endif
 void Destroy(void* handle) {
     delete static_cast<int*>(handle);
 }
@@ -44,6 +56,15 @@ TORUSTIQ_PLUGIN_EXPORT const torustiq_plugin_info* torustiq_plugin_get_info(void
 
 TORUSTIQ_PLUGIN_EXPORT int32_t torustiq_plugin_init(const torustiq_registrar* registrar) {
     Log("init");
+#ifdef FAKE_PLUGIN_SECRET
+    torustiq_secret_vtable vtable{};
+    vtable.abi_version = TORUSTIQ_SDK_ABI_VERSION;
+    vtable.name = FAKE_PLUGIN_ID;
+    vtable.create = CreateSecret;
+    vtable.resolve = Resolve;
+    vtable.destroy = Destroy;
+    return registrar->register_secret(registrar->context, &vtable);
+#else
     torustiq_output_vtable vtable{};
     vtable.abi_version = TORUSTIQ_SDK_ABI_VERSION;
     vtable.name = FAKE_PLUGIN_ID;
@@ -51,6 +72,7 @@ TORUSTIQ_PLUGIN_EXPORT int32_t torustiq_plugin_init(const torustiq_registrar* re
     vtable.write = Write;
     vtable.destroy = Destroy;
     return registrar->register_output(registrar->context, &vtable);
+#endif
 }
 
 TORUSTIQ_PLUGIN_EXPORT void torustiq_plugin_shutdown(void) {

@@ -43,7 +43,14 @@ if(UNIX)
         torustiq_set_warnings(${fake_id})
         add_dependencies(plugin_loader_test ${fake_id})
     endforeach()
+    add_library(fake_secret MODULE fake_plugin.cpp)
+    target_link_libraries(fake_secret PRIVATE torustiq::sdk)
+    target_compile_definitions(fake_secret PRIVATE FAKE_PLUGIN_ID="fake_secret"
+                                                   FAKE_PLUGIN_ABI=0 FAKE_PLUGIN_SECRET)
+    torustiq_set_warnings(fake_secret)
+    add_dependencies(plugin_loader_test fake_secret)
     target_compile_definitions(plugin_loader_test PRIVATE
+        FAKE_PLUGIN_SECRET_LIB="$<TARGET_FILE:fake_secret>"
         FAKE_PLUGIN_A="$<TARGET_FILE:fake_a>"
         FAKE_PLUGIN_B="$<TARGET_FILE:fake_b>"
         FAKE_PLUGIN_BAD_ABI="$<TARGET_FILE:fake_bad>")
@@ -67,6 +74,12 @@ torustiq_add_test(stdin_input_test SOURCES ${SRC}/plugins/inputs/stdin_input.cpp
                   ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp)
 torustiq_add_test(directory_input_test SOURCES ${SRC}/plugins/inputs/directory_input.cpp
                   ${SRC}/core/message.cpp ${SRC}/core/plugin_registry.cpp)
+torustiq_add_test(secrets_test SOURCES ${SRC}/core/secrets.cpp ${SRC}/core/message.cpp
+                  ${SRC}/core/plugin_registry.cpp)
+torustiq_add_test(file_secret_test SOURCES ${SRC}/plugins/secrets/file_secret.cpp
+                  ${SRC}/core/plugin_registry.cpp)
+torustiq_add_test(env_secret_test SOURCES ${SRC}/plugins/secrets/env_secret.cpp
+                  ${SRC}/core/plugin_registry.cpp)
 
 if(TORUSTIQ_WITH_LUA)
     set(LUA_COMMON ${SRC}/plugins/_common/lua/lua_plugin.cpp

@@ -141,4 +141,25 @@ TEST_F(PluginLoaderTest, OnlyReferencedPluginsAreInitialised) {
     EXPECT_EQ(Log(), "init fake_a\n");
 }
 
+TEST_F(PluginLoaderTest, LoadsDynamicSecretProviderReferencedBySecretsSection) {
+    Link(FAKE_PLUGIN_SECRET_LIB, "libfake_secret.so");
+    PluginLoader loader;
+    PluginRegistry registry;
+    loader.Scan(PluginsDir());
+    PipelineConfig config = ConfigWithOutputs({"stdout"});
+    config.secrets.push_back({"db", "fake_secret", {}});
+    LoadReferencedPlugins(config, loader, registry);
+    EXPECT_TRUE(loader.IsLoaded("fake_secret"));
+    EXPECT_NE(registry.FindSecret("fake_secret"), nullptr);
+}
+
+TEST_F(PluginLoaderTest, SecretProviderNotLoadedWhenUnused) {
+    Link(FAKE_PLUGIN_SECRET_LIB, "libfake_secret.so");
+    PluginLoader loader;
+    PluginRegistry registry;
+    loader.Scan(PluginsDir());
+    LoadReferencedPlugins(ConfigWithOutputs({"stdout"}), loader, registry);
+    EXPECT_FALSE(loader.IsLoaded("fake_secret"));
+}
+
 } // namespace torustiq

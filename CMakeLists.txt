@@ -82,10 +82,37 @@ if(TORUSTIQ_WITH_LUA)
     add_library(torustiq::lua ALIAS torustiq_lua)
 endif()
 
-# --- SDK: separate project, imported the same way plugins do it. ---
-# For a local checkout: -DFETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK=/path/to/torustiq-sdk
-find_package(torustiq_sdk QUIET)
+# --- SDK: a local checkout if there is one, then an installed package, then git. ---
+# Order: -DFETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK=<dir>, env TORUSTIQ_SDK_SOURCE_DIR=<dir>,
+# ../torustiq-sdk (Debug builds only), find_package(torustiq_sdk), FetchContent from git.
+# (Same block in the torustiq and torustiq-plugins projects.)
+if(NOT FETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK)
+    if(DEFINED ENV{TORUSTIQ_SDK_SOURCE_DIR} AND NOT "$ENV{TORUSTIQ_SDK_SOURCE_DIR}" STREQUAL "")
+        if(NOT EXISTS "$ENV{TORUSTIQ_SDK_SOURCE_DIR}/CMakeLists.txt")
+            message(FATAL_ERROR
+                "TORUSTIQ_SDK_SOURCE_DIR='$ENV{TORUSTIQ_SDK_SOURCE_DIR}' is not a torustiq-sdk checkout "
+                "(no CMakeLists.txt there)")
+        endif()
+        set(FETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK "$ENV{TORUSTIQ_SDK_SOURCE_DIR}")
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        cmake_path(SET torustiq_sdk_sibling NORMALIZE "${CMAKE_CURRENT_SOURCE_DIR}/../torustiq-sdk")
+        if(EXISTS "${torustiq_sdk_sibling}/CMakeLists.txt")
+            set(FETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK "${torustiq_sdk_sibling}")
+        endif()
+    endif()
+endif()
+if(FETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK)
+    message(STATUS "torustiq-sdk: local sources in ${FETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK}")
+else()
+    find_package(torustiq_sdk QUIET)
+    if(torustiq_sdk_FOUND)
+        message(STATUS "torustiq-sdk: installed package")
+    else()
+        message(STATUS "torustiq-sdk: fetching from git")
+    endif()
+endif()
 if(NOT torustiq_sdk_FOUND)
+    # With FETCHCONTENT_SOURCE_DIR_TORUSTIQ_SDK set, FetchContent uses that directory and does not clone.
     FetchContent_Declare(torustiq_sdk
         GIT_REPOSITORY git@github.com:ignytis/torustiq-sdk.git
         GIT_TAG main)
@@ -99,7 +126,8 @@ set(TORUSTIQ_CORE_SOURCES
     src/core/pipeline_config.cpp
     src/core/paths.cpp
     src/core/plugin_loader.cpp
-    src/core/plugin_registry.cpp)
+    src/core/plugin_registry.cpp
+    src/core/secrets.cpp)
 add_library(torustiq_core STATIC ${TORUSTIQ_CORE_SOURCES})
 target_include_directories(torustiq_core PUBLIC src)
 target_link_libraries(torustiq_core PUBLIC torustiq::sdk yaml-cpp::yaml-cpp Threads::Threads)
@@ -113,7 +141,9 @@ set(TORUSTIQ_PLUGIN_SOURCES
     src/plugins/inputs/stdin_input.cpp
     src/plugins/transforms/json_transforms.cpp
     src/plugins/transforms/text_transforms.cpp
-    src/plugins/outputs/stdout_output.cpp)
+    src/plugins/outputs/stdout_output.cpp
+    src/plugins/secrets/env_secret.cpp
+    src/plugins/secrets/file_secret.cpp)
 add_library(torustiq_plugins STATIC ${TORUSTIQ_PLUGIN_SOURCES})
 target_include_directories(torustiq_plugins PUBLIC src)
 target_link_libraries(torustiq_plugins PUBLIC torustiq::sdk torustiq_core)

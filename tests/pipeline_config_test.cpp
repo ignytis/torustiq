@@ -91,6 +91,120 @@ TEST(PipelineConfigTest, MultipleInputsRequireExplicitWiring) {
                                         "outputs: {o: {type: s, inputs: [a, b]}}"));
 }
 
+namespace {
+
+// A pipeline with the given `config` block (indented under the input) and secrets section.
+std::string WithInputConfig(const std::string& input_config) {
+    return R"(
+secrets:
+  db_pass:
+    kind: file
+    config:
+      path: /run/secrets/db
+  token:
+    kind: env
+    config: {key: TOKEN}
+inputs:
+  in:
+    type: stdin
+    config:
+)" + input_config +
+           R"(
+outputs:
+  out:
+    type: stdout
+)";
+}
+
+} // namespace
+
+TEST(PipelineConfigTest, ParsesSecretsSection) {
+    const auto c = ParsePipelineConfig(WithInputConfig("      user: bob"));
+    ASSERT_EQ(c.secrets.size(), 2u);
+    EXPECT_EQ(c.secrets[0].id, "db_pass");
+    EXPECT_EQ(c.secrets[0].kind, "file");
+    EXPECT_EQ(c.secrets[0].config.at("path"), "/run/secrets/db");
+    EXPECT_EQ(c.secrets[1].id, "token");
+    EXPECT_EQ(c.secrets[1].kind, "env");
+    EXPECT_EQ(c.secrets[1].config.at("key"), "TOKEN");
+}
+
+TEST(PipelineConfigTest, NoSecretsSectionIsFine) {
+    const auto c =
+        ParsePipelineConfig("inputs: {in: {type: stdin}}\noutputs: {out: {type: stdout}}");
+    EXPECT_TRUE(c.secrets.empty());
+    EXPECT_TRUE(c.inputs[0].secret_refs.empty());
+}
+
+TEST(PipelineConfigTest, SecretReferenceIsKeptSymbolic) {
+    const auto c = ParsePipelineConfig(WithInputConfig(R"(      user: bob
+      password:
+        _kind: ref_secret
+        id: db_pass)"));
+    const auto& in = c.inputs[0];
+    EXPECT_EQ(in.config.at("user"), "bob");
+    EXPECT_FALSE(in.config.contains("password"));
+    EXPECT_FALSE(in.config.contains("password._kind"));
+    ASSERT_EQ(in.secret_refs.size(), 1u);
+    EXPECT_EQ(in.secret_refs.at("password"), "db_pass");
+}
+
+TEST(PipelineConfigTest, NestedSecretReferenceUsesFlattenedKey) {
+    const auto c = ParsePipelineConfig(WithInputConfig(R"(      auth:
+        pass: {_kind: ref_secret, id: token}
+        user: bob
+      list:
+        - {_kind: ref_secret, id: db_pass})"));
+    const auto& in = c.inputs[0];
+    EXPECT_EQ(in.secret_refs.at("auth.pass"), "token");
+    EXPECT_EQ(in.secret_refs.at("list.0"), "db_pass");
+    EXPECT_EQ(in.config.at("auth.user"), "bob");
+}
+
+TEST(PipelineConfigTest, ExplicitStringKindEqualsPlainScalar) {
+    const auto c = ParsePipelineConfig(WithInputConfig(R"(      user:
+        _kind: string
+        value: myuser
+      plain: myuser)"));
+    EXPECT_EQ(c.inputs[0].config.at("user"), "myuser");
+    EXPECT_EQ(c.inputs[0].config.at("plain"), "myuser");
+    EXPECT_TRUE(c.inputs[0].secret_refs.empty());
+}
+
+TEST(PipelineConfigTest, RejectsInvalidTypedValues) {
+    // Unknown _kind.
+    EXPECT_THROW(ParsePipelineConfig(WithInputConfig("      p: {_kind: vault, id: x}")),
+                 ConfigError);
+    // ref_secret without id, string without value.
+    EXPECT_THROW(ParsePipelineConfig(WithInputConfig("      p: {_kind: ref_secret}")), ConfigError);
+    EXPECT_THROW(ParsePipelineConfig(WithInputConfig("      p: {_kind: string}")), ConfigError);
+    // Non-scalar id / _kind.
+    EXPECT_THROW(ParsePipelineConfig(WithInputConfig("      p: {_kind: ref_secret, id: [a]}")),
+                 ConfigError);
+    EXPECT_THROW(ParsePipelineConfig(WithInputConfig("      p: {_kind: {a: b}, id: x}")),
+                 ConfigError);
+    // Stray fields.
+    EXPECT_THROW(
+        ParsePipelineConfig(WithInputConfig("      p: {_kind: ref_secret, id: token, value: x}")),
+        ConfigError);
+    // Reference to an undeclared secret.
+    EXPECT_THROW(ParsePipelineConfig(WithInputConfig("      p: {_kind: ref_secret, id: nope}")),
+                 ConfigError);
+}
+
+TEST(PipelineConfigTest, RejectsMalformedSecretsSection) {
+    const std::string tail = "\ninputs: {in: {type: stdin}}\noutputs: {out: {type: stdout}}";
+    EXPECT_THROW(ParsePipelineConfig("secrets: [a]" + tail), ConfigError);
+    EXPECT_THROW(ParsePipelineConfig("secrets: {a: x}" + tail), ConfigError);
+    EXPECT_THROW(ParsePipelineConfig("secrets: {a: {config: {}}}" + tail), ConfigError);
+    EXPECT_THROW(ParsePipelineConfig("secrets: {a: {kind: [x]}}" + tail), ConfigError);
+    // Secret providers' own config must be static.
+    EXPECT_THROW(ParsePipelineConfig("secrets:\n  a: {kind: file, config: {path: {_kind: "
+                                     "ref_secret, id: a}}}" +
+                                     tail),
+                 ConfigError);
+}
+
 TEST(PipelineConfigTest, LoadMissingFileThrowsConfigError) {
     EXPECT_THROW(LoadPipelineConfig("/nonexistent/pipeline.yaml"), ConfigError);
 }
