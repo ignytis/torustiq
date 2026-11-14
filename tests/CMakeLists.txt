@@ -19,6 +19,7 @@ function(torustiq_add_test name)
     target_link_libraries(${name} PRIVATE torustiq::sdk GTest::gtest_main Threads::Threads
                                           ${T_LIBS})
     torustiq_set_warnings(${name})
+    torustiq_copy_runtime_dlls(${name})
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 

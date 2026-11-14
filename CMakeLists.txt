@@ -17,6 +17,16 @@ option(TORUSTIQ_DEV_MODE "Default TORUSTIQ_HOME to <project>/dev/torustiq_home" 
 option(TORUSTIQ_WITH_LUA "Build the Lua input/transform/output plugins" ON)
 
 include(FetchContent)
+
+# Imported packages (e.g. vcpkg) often ship only Debug/Release configs; never fall back to Debug
+# for optimized builds (MSVC runtime / _ITERATOR_DEBUG_LEVEL mismatch).
+if(NOT DEFINED CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO)
+    set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO RelWithDebInfo Release "")
+endif()
+if(NOT DEFINED CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL)
+    set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL MinSizeRel Release "")
+endif()
+
 find_package(Threads REQUIRED)
 
 # --- Third-party dependencies: prefer system packages, fall back to FetchContent. ---
@@ -54,6 +64,17 @@ function(torustiq_set_warnings target)
         target_compile_options(${target} PRIVATE /W4)
     else()
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endfunction()
+
+# Windows has no rpath: copy the shared libraries a target depends on (e.g. yaml-cpp from vcpkg)
+# next to it after the build, for the matching configuration. No-op when there are none.
+function(torustiq_copy_runtime_dlls target)
+    if(WIN32)
+        set(dlls "$<TARGET_RUNTIME_DLLS:${target}>")
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND "$<$<BOOL:${dlls}>:${CMAKE_COMMAND};-E;copy_if_different;${dlls};$<TARGET_FILE_DIR:${target}>>"
+            COMMAND_EXPAND_LISTS)
     endif()
 endfunction()
 
@@ -171,6 +192,7 @@ else()
     target_compile_definitions(torustiq PRIVATE TORUSTIQ_DEFAULT_HOME="")
 endif()
 torustiq_set_warnings(torustiq)
+torustiq_copy_runtime_dlls(torustiq)
 
 if(TORUSTIQ_BUILD_TESTS)
     enable_testing()
