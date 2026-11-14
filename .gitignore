@@ -3,6 +3,11 @@
 .project
 .zed
 
+# Visual Studio
+.vs/
+out/
+CMakeSettings.json
+
 # Prerequisites
 *.d
 
