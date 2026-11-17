@@ -10,10 +10,23 @@ Inputs emit **bytes** by default; see [Payloads](../payloads.md).
 
 ## `stdin`
 Reads standard input; each line becomes one record.
+```yaml
+inputs:
+  in:
+    type: stdin
+```
 
 ## `directory`
 Reads every file in `path` (sorted) as one record. Headers: `filename`, `path`. The pipeline finishes
 when all files are read.
+```yaml
+inputs:
+  files:
+    type: directory
+    config:
+      path: ./examples
+```
+See `examples/directory.yaml`.
 
 ## `lua`
 Parameters: `script` (inline code) or `file` (path), and optional `max_instructions` (default `10000000`,
@@ -21,6 +34,20 @@ Parameters: `script` (inline code) or `file` (path), and optional `max_instructi
 error instead of hanging the stage. The `config:` section is visible to the script as the global table
 `config`. `payload: bytes|text|value` sets the kind the input emits (default `bytes`).
 
+```yaml
+inputs:
+  generator:
+    type: lua
+    config:
+      count: 3                # visible to the script as config.count
+      max_instructions: 1000000
+      script: |
+        function run(emit)
+          for i = 1, tonumber(config.count) do
+            if not emit({ body = "message " .. i, headers = { seq = tostring(i) } }) then return end
+          end
+        end
+```
 ```lua
 function run(emit)    -- emit(msg) returns false when the pipeline is stopping; sleep(seconds) exists
   while emit("hello") do sleep(1) end

@@ -12,12 +12,18 @@ Kinds are agreed when the pipeline is built; see [Payloads](../payloads.md).
 
 ## `decode_text` / `encode_text`
 ```yaml
-to_text:  {type: decode_text, config: {invalid: replace}}   # invalid UTF-8: error|replace
-to_bytes: {type: encode_text}
+transforms:
+  to_text:  {type: decode_text, config: {invalid: replace}}   # invalid UTF-8: error|replace
+  to_bytes: {type: encode_text}
 ```
 
 ## `decode_json` / `encode_json`
 `decode_json` parses bytes or text into a structured value; `encode_json` writes it back as compact JSON.
+```yaml
+transforms:
+  parse: {type: decode_json}   # bytes or text -> structured
+  dump:  {type: encode_json}   # structured -> bytes
+```
 See `examples/json_pipeline.yaml`.
 
 ## `lua`
@@ -26,6 +32,18 @@ Parameters: `script` (inline code) or `file` (path), and optional `max_instructi
 hanging the stage. The `config:` section is visible to the script as the global table `config`.
 `payload: bytes|text|value` sets the kind the transform emits (default: the kind it receives).
 
+```yaml
+transforms:
+  shout_odd:
+    type: lua
+    config:
+      script: |
+        function process(msg)
+          if tonumber(msg.headers.seq) % 2 == 0 then return nil end
+          msg.body = msg.body:upper()
+          return msg
+        end
+```
 ```lua
 function process(msg)  -- return nil (drop), a message, or a list of messages
   return msg
