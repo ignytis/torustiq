@@ -36,6 +36,7 @@ pipeline definition and runs it: one or more inputs, zero or more transforms, on
   plugins only ever see plain values. Scalars are static (`_kind: string`). Never log secret values.
 - `tests/` — one `<unit>_test.cpp` per unit (GoogleTest); each test target compiles only the sources it needs.
 - `examples/` — sample pipelines.
+- `docs/` — user documentation (payloads, secrets, one page per plugin kind); update it with plugin/config changes.
 - The plugin SDK is a **separate project** (`torustiq-sdk`), fetched via `FetchContent`. API changes go there
   first; do not re-add SDK headers to this repo.
 
